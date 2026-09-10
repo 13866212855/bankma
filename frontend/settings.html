@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>个人设置 - 客户扫码提现</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- 顶部导航栏 -->
+    <header class="app-header">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <a href="index.html" style="font-size: 20px; text-decoration: none; color: var(--text-main); display: flex; align-items: center;">‹</a>
+        <h1 class="app-title">收款账户设置</h1>
+      </div>
+      <span class="header-tag">AES-256 加密</span>
+    </header>
+
+    <!-- 主体内容 -->
+    <main class="app-content">
+      <!-- 顶部信息说明 -->
+      <div class="ui-card" style="padding: 12px 16px; background-color: var(--primary-light); border-color: #C7D2FE;">
+        <div style="font-size: 13px; color: var(--primary-color); font-weight: 600;">
+          💡 提现加款直达配置
+        </div>
+        <p style="font-size: 12px; color: #4338CA; margin-top: 4px; line-height: 1.4;">
+          配置您接收加款的收款方式。扫码支付成功后，系统将自动将加款资金转入您指定的默认账户中。
+        </p>
+      </div>
+
+      <!-- 收款方式切换选项卡 -->
+      <div class="form-tabs">
+        <div class="form-tab active" data-tab="wechat">💬 微信收款</div>
+        <div class="form-tab" data-tab="alipay">🔵 支付宝</div>
+        <div class="form-tab" data-tab="bank">🏦 银行卡</div>
+      </div>
+
+      <!-- 表单配置容器 -->
+      <div class="ui-card">
+        <!-- 微信表单 -->
+        <form id="form-wechat" class="method-form">
+          <div class="form-group">
+            <label class="form-label">微信收款账号 / 绑定手机号 <span style="color: var(--danger-color);">*</span></label>
+            <input type="text" class="form-input" id="wx-account" placeholder="请输入微信号或微信绑定的手机号" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">收款人真实姓名 (用于大额微信核名)</label>
+            <input type="text" class="form-input" id="wx-real-name" placeholder="请输入实名认证姓名 (如: 张三)">
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0;">
+            <span style="font-size: 13px; font-weight: 600; color: var(--text-main);">设为默认收款方式</span>
+            <input type="checkbox" id="wx-is-default" style="width: 18px; height: 18px; accent-color: var(--primary-color);">
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 8px;">保存微信收款配置</button>
+        </form>
+
+        <!-- 支付宝表单 (默认隐藏) -->
+        <form id="form-alipay" class="method-form" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">支付宝账号 (手机号或邮箱) <span style="color: var(--danger-color);">*</span></label>
+            <input type="text" class="form-input" id="ali-account" placeholder="请输入支付宝绑定的手机号或邮箱" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">支付宝实名姓名 <span style="color: var(--danger-color);">*</span></label>
+            <input type="text" class="form-input" id="ali-real-name" placeholder="与支付宝实名一致的姓名" required>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0;">
+            <span style="font-size: 13px; font-weight: 600; color: var(--text-main);">设为默认收款方式</span>
+            <input type="checkbox" id="ali-is-default" style="width: 18px; height: 18px; accent-color: var(--primary-color);">
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 8px;">保存支付宝收款配置</button>
+        </form>
+
+        <!-- 银行卡表单 (默认隐藏) -->
+        <form id="form-bank" class="method-form" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">银行卡号 <span style="color: var(--danger-color);">*</span></label>
+            <input type="text" class="form-input" id="bank-account" placeholder="请输入本人储蓄卡/借记卡卡号" required maxlength="23">
+          </div>
+          <div class="form-group">
+            <label class="form-label">开户银行名称 <span style="color: var(--danger-color);">*</span></label>
+            <input type="text" class="form-input" id="bank-name" placeholder="例如: 中国工商银行 / 招商银行" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">持卡人姓名 <span style="color: var(--danger-color);">*</span></label>
+            <input type="text" class="form-input" id="bank-real-name" placeholder="开户人真实姓名" required>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0;">
+            <span style="font-size: 13px; font-weight: 600; color: var(--text-main);">设为默认收款方式</span>
+            <input type="checkbox" id="bank-is-default" style="width: 18px; height: 18px; accent-color: var(--primary-color);">
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 8px;">保存银行卡收款配置</button>
+        </form>
+      </div>
+
+      <!-- 已保存收款方式一览卡片 -->
+      <div class="ui-card">
+        <div class="ui-card-title">
+          <span>已绑定的收款渠道</span>
+          <span style="font-size: 12px; color: var(--text-muted);">已加密安全存储</span>
+        </div>
+        <div id="saved-configs-list" style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 8px;">正在加载配置...</div>
+        </div>
+      </div>
+
+      <!-- 安全保障提示 -->
+      <div class="security-box">
+        <span style="font-size: 20px;">🛡️</span>
+        <div>
+          <strong style="color: var(--text-main);">安全加密保障声明</strong>
+          <p style="margin-top: 2px;">
+            您的微信号、支付宝账号及银行卡敏感信息均经过 AES-256 算法加密后存入 Neon PostgreSQL 数据库，任何第三方均无法反编译或读取明文，确保资金与隐私绝不外泄。
+          </p>
+        </div>
+      </div>
+    </main>
+
+    <!-- 底部导航 -->
+    <nav class="app-nav">
+      <a href="index.html" class="nav-item">
+        <div class="nav-icon">🏠</div>
+        <span>首页</span>
+      </a>
+      <a href="status.html" class="nav-item">
+        <div class="nav-icon">📊</div>
+        <span>订单状态</span>
+      </a>
+      <a href="settings.html" class="nav-item active">
+        <div class="nav-icon">⚙️</div>
+        <span>个人设置</span>
+      </a>
+    </nav>
+  </div>
+
+  <script src="assets/app.js"></script>
+  <script>
+    let activeTab = 'wechat';
+    let currentSavedConfigs = [];
+
+    // Tab 切换
+    document.querySelectorAll('.form-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.form-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        activeTab = tab.dataset.tab;
+
+        document.querySelectorAll('.method-form').forEach(form => form.style.display = 'none');
+        document.getElementById(`form-${activeTab}`).style.display = 'block';
+      });
+    });
+
+    // 加载用户现有收款配置
+    async function loadConfigs() {
+      try {
+        const userId = StateService.getUserId();
+        const data = await API.get(`/user/config/${userId}`);
+        currentSavedConfigs = data.configs || [];
+
+        // 回显已有配置到表单
+        currentSavedConfigs.forEach(item => {
+          if (item.method === 'wechat') {
+            document.getElementById('wx-account').value = item.account || '';
+            document.getElementById('wx-real-name').value = item.real_name || '';
+            document.getElementById('wx-is-default').checked = item.is_default;
+          } else if (item.method === 'alipay') {
+            document.getElementById('ali-account').value = item.account || '';
+            document.getElementById('ali-real-name').value = item.real_name || '';
+            document.getElementById('ali-is-default').checked = item.is_default;
+          } else if (item.method === 'bank') {
+            document.getElementById('bank-account').value = item.account || '';
+            document.getElementById('bank-name').value = item.bank_name || '';
+            document.getElementById('bank-real-name').value = item.real_name || '';
+            document.getElementById('bank-is-default').checked = item.is_default;
+          }
+        });
+
+        // 渲染已保存卡片列表
+        renderSavedConfigs();
+      } catch (err) {
+        console.warn('加载收款配置失败:', err);
+      }
+    }
+
+    // 渲染已保存的收款卡片列表
+    function renderSavedConfigs() {
+      const listContainer = document.getElementById('saved-configs-list');
+      if (!currentSavedConfigs || currentSavedConfigs.length === 0) {
+        listContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 12px; text-align: center;">尚未配置任何收款账号</div>';
+        return;
+      }
+
+      const methodNames = { wechat: '微信支付', alipay: '支付宝', bank: '银行卡' };
+      const methodIcons = { wechat: '💬', alipay: '🔵', bank: '🏦' };
+
+      listContainer.innerHTML = currentSavedConfigs.map(item => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #F8FAFC; border: 1px solid var(--border-color); border-radius: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 20px;">${methodIcons[item.method] || '💳'}</span>
+            <div>
+              <div style="font-weight: 600; font-size: 13px; color: var(--text-main);">
+                ${methodNames[item.method]}
+                ${item.bank_name ? ` · ${item.bank_name}` : ''}
+                ${item.is_default ? '<span style="font-size: 10px; background: #EEF2FF; color: var(--primary-color); padding: 2px 6px; border-radius: 4px; margin-left: 4px;">默认</span>' : ''}
+              </div>
+              <div style="font-size: 12px; color: var(--text-muted); font-family: monospace;">
+                ${item.account_masked} ${item.real_name ? `(${item.real_name})` : ''}
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" style="height: 28px; padding: 0 8px;" onclick="switchTabTo('${item.method}')">编辑</button>
+        </div>
+      `).join('');
+    }
+
+    function switchTabTo(method) {
+      const tab = document.querySelector(`.form-tab[data-tab="${method}"]`);
+      if (tab) tab.click();
+    }
+
+    // 保存微信
+    document.getElementById('form-wechat').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const account = document.getElementById('wx-account').value.trim();
+      const realName = document.getElementById('wx-real-name').value.trim();
+      const isDefault = document.getElementById('wx-is-default').checked;
+
+      if (!account) return Toast.error('微信号或手机号不能为空');
+
+      Loading.show('正在保存微信收款配置...');
+      try {
+        await API.post('/user/config', {
+          user_id: StateService.getUserId(),
+          method: 'wechat',
+          account,
+          real_name: realName,
+          is_default: isDefault
+        });
+        Loading.hide();
+        Toast.success('微信收款方式保存成功！');
+        loadConfigs();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '保存失败');
+      }
+    });
+
+    // 保存支付宝
+    document.getElementById('form-alipay').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const account = document.getElementById('ali-account').value.trim();
+      const realName = document.getElementById('ali-real-name').value.trim();
+      const isDefault = document.getElementById('ali-is-default').checked;
+
+      if (!account) return Toast.error('支付宝账号不能为空');
+      if (!realName) return Toast.error('请填写支付宝实名认证姓名');
+
+      Loading.show('正在保存支付宝收款配置...');
+      try {
+        await API.post('/user/config', {
+          user_id: StateService.getUserId(),
+          method: 'alipay',
+          account,
+          real_name: realName,
+          is_default: isDefault
+        });
+        Loading.hide();
+        Toast.success('支付宝收款方式保存成功！');
+        loadConfigs();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '保存失败');
+      }
+    });
+
+    // 保存银行卡
+    document.getElementById('form-bank').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const account = document.getElementById('bank-account').value.replace(/\s+/g, '').trim();
+      const bankName = document.getElementById('bank-name').value.trim();
+      const realName = document.getElementById('bank-real-name').value.trim();
+      const isDefault = document.getElementById('bank-is-default').checked;
+
+      if (!account || account.length < 12) return Toast.error('请输入正确的银行卡号');
+      if (!bankName) return Toast.error('请填写开户行名称');
+      if (!realName) return Toast.error('请填写持卡人真实姓名');
+
+      Loading.show('正在保存银行卡收款配置...');
+      try {
+        await API.post('/user/config', {
+          user_id: StateService.getUserId(),
+          method: 'bank',
+          account,
+          bank_name: bankName,
+          real_name: realName,
+          is_default: isDefault
+        });
+        Loading.hide();
+        Toast.success('银行卡收款方式保存成功！');
+        loadConfigs();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '保存失败');
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', loadConfigs);
+  </script>
+</body>
+</html>

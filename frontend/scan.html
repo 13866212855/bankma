@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>扫描二维码 - 客户扫码提现</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="assets/jsqr.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- 顶部导航栏 -->
+    <header class="app-header">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <a href="index.html" style="font-size: 20px; text-decoration: none; color: var(--text-main); display: flex; align-items: center;">‹</a>
+        <h1 class="app-title">扫描收款码</h1>
+      </div>
+      <button id="btn-switch-album" class="btn btn-secondary btn-sm" style="width: auto; height: 32px; padding: 0 10px;">
+        相册选取
+      </button>
+      <input type="file" id="scan-album-input" accept="image/*" style="display: none;">
+    </header>
+
+    <!-- 扫码主体内容 -->
+    <main class="app-content">
+      <!-- 摄像头取景器卡片 -->
+      <div class="scanner-viewport" id="scanner-box">
+        <video id="camera-video" playsinline muted autoplay></video>
+        
+        <!-- 扫码框与激光线 -->
+        <div class="scanner-frame">
+          <div class="scanner-laser"></div>
+        </div>
+
+        <div class="scanner-hint" id="scanner-hint-text">将二维码放入框内即可自动识别</div>
+      </div>
+
+      <!-- 摄像头异常 / 无法调用的降级提示区 (默认隐藏，若 getUserMedia 失败时显示) -->
+      <div id="camera-error-banner" class="ui-card" style="display: none; border-color: #FCD34D; background-color: #FFFBEB;">
+        <div style="display: flex; gap: 10px; align-items: flex-start;">
+          <span style="font-size: 20px;">⚠️</span>
+          <div>
+            <strong style="color: #92400E; font-size: 14px;">无法访问摄像头</strong>
+            <p style="color: #B45309; font-size: 12px; margin-top: 4px;" id="camera-error-msg">
+              可能未授予摄像头权限，或当前处于非安全上下文环境。
+            </p>
+          </div>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 6px;">
+          <button class="btn btn-primary btn-sm" id="btn-retry-camera">重试授权相机</button>
+          <button class="btn btn-secondary btn-sm" id="btn-fallback-album">上传二维码图片</button>
+        </div>
+      </div>
+
+      <!-- 扫码操作提示与快捷选择 -->
+      <div class="ui-card">
+        <div class="ui-card-title">
+          <span>扫码识别说明</span>
+          <span style="font-size: 12px; color: var(--text-muted);">实时毫秒级识别</span>
+        </div>
+        <ul style="padding-left: 18px; color: var(--text-muted); font-size: 13px; line-height: 1.6;">
+          <li>对准商家桌面收款码或收银机屏幕即可自动对焦识别；</li>
+          <li>若环境光线较暗或反光，建议点击右上角<strong>“相册选取”</strong>；</li>
+          <li>识别后将自动解析商家名称、购买商品及应付金额，确认后即刻触发加款。</li>
+        </ul>
+      </div>
+
+      <!-- 预置商户快捷扫描模拟区 -->
+      <div class="ui-card">
+        <div class="ui-card-title">
+          <span>快速模拟扫码</span>
+          <span class="quick-test-badge">免扫直接测试</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;" id="quick-scan-demo-list">
+          <button class="btn btn-secondary btn-sm" style="justify-content: space-between;" onclick="simulateScanContent('MCH_LUCKIN_COFFEE_001_9.90')">
+            <span>☕ 瑞幸咖啡 (生椰拿铁)</span>
+            <span style="color: var(--primary-color); font-weight: 700;">¥9.90</span>
+          </button>
+          <button class="btn btn-secondary btn-sm" style="justify-content: space-between;" onclick="simulateScanContent('MCH_FAMILYMART_BENTO_002_28.50')">
+            <span>🍱 全家便利店 (厚切猪排便当)</span>
+            <span style="color: var(--primary-color); font-weight: 700;">¥28.50</span>
+          </button>
+          <button class="btn btn-secondary btn-sm" style="justify-content: space-between;" onclick="simulateScanContent('MCH_HEYTEA_GRAPE_003_19.00')">
+            <span>🍇 喜茶 (多肉葡萄)</span>
+            <span style="color: var(--primary-color); font-weight: 700;">¥19.00</span>
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- 底部导航 -->
+    <nav class="app-nav">
+      <a href="index.html" class="nav-item">
+        <div class="nav-icon">🏠</div>
+        <span>首页</span>
+      </a>
+      <a href="status.html" class="nav-item">
+        <div class="nav-icon">📊</div>
+        <span>订单状态</span>
+      </a>
+      <a href="settings.html" class="nav-item">
+        <div class="nav-icon">⚙️</div>
+        <span>个人设置</span>
+      </a>
+    </nav>
+  </div>
+
+  <!-- 扫码成功确认弹窗 -->
+  <div id="scan-result-modal" class="modal-mask" style="display: none;">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h3 class="modal-title">收款码识别成功</h3>
+        <button class="close-btn" id="scan-modal-close">&times;</button>
+      </div>
+
+      <div class="pay-amount-display">
+        <div class="pay-amount-label">应付金额</div>
+        <div class="pay-amount-value">
+          <span class="pay-amount-symbol">¥</span><span id="scan-amount">0.00</span>
+        </div>
+      </div>
+
+      <div class="info-rows">
+        <div class="info-row">
+          <span class="info-row-label">商家名称</span>
+          <span class="info-row-val" id="scan-merchant">--</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row-label">商品名称</span>
+          <span class="info-row-val" id="scan-product">--</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row-label">提现入账账户</span>
+          <span class="info-row-val" id="scan-account-text" style="color: var(--primary-color);">微信零钱</span>
+        </div>
+      </div>
+
+      <div>
+        <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);">提现到账方式：</label>
+        <div class="method-chips" id="scan-method-chips">
+          <div class="method-chip active" data-method="wechat">💬 微信</div>
+          <div class="method-chip" data-method="alipay">🔵 支付宝</div>
+          <div class="method-chip" data-method="bank">🏦 银行卡</div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="btn-scan-confirm-pay">
+        确认支付并自动提现
+      </button>
+    </div>
+  </div>
+
+  <script src="assets/app.js"></script>
+  <script>
+    let videoElem = document.getElementById('camera-video');
+    let currentResult = null;
+    let selectedMethod = 'wechat';
+    let userConfigs = [];
+
+    // 初始化相机
+    async function initCamera() {
+      document.getElementById('camera-error-banner').style.display = 'none';
+      document.getElementById('scanner-hint-text').innerText = '将二维码放入框内即可自动识别';
+
+      QRScannerService.startCamera(
+        videoElem,
+        (detectedContent) => {
+          handleDetectedQr(detectedContent);
+        },
+        (error) => {
+          console.warn('相机无法启动:', error);
+          document.getElementById('camera-error-banner').style.display = 'flex';
+          document.getElementById('camera-error-msg').innerText = error.message || '请确保允许了浏览器相机权限';
+        }
+      );
+    }
+
+    // 处理识别到的二维码内容
+    async function handleDetectedQr(qrContent) {
+      Loading.show('正在解析收款码...');
+      try {
+        const res = await API.post('/qrcode/parse', { qr_content: qrContent });
+        Loading.hide();
+        openResultModal(res);
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '无法识别该二维码，请重试');
+        // 2秒后重新开启扫描
+        setTimeout(() => {
+          if (!currentResult) {
+            initCamera();
+          }
+        }, 2000);
+      }
+    }
+
+    // 快捷模拟扫码
+    function simulateScanContent(content) {
+      handleDetectedQr(content);
+    }
+
+    // 打开识别结果面板
+    function openResultModal(data) {
+      currentResult = data;
+      QRScannerService.stopCamera();
+
+      document.getElementById('scan-amount').innerText = Number(data.amount).toFixed(2);
+      document.getElementById('scan-merchant').innerText = data.merchant_name;
+      document.getElementById('scan-product').innerText = data.product_name;
+
+      updateMethodDisplay();
+      document.getElementById('scan-result-modal').style.display = 'flex';
+    }
+
+    // 加载收款账户信息
+    async function loadUserConfigs() {
+      try {
+        const userId = StateService.getUserId();
+        const data = await API.get(`/user/config/${userId}`);
+        userConfigs = data.configs || [];
+        if (data.default_config) {
+          selectedMethod = data.default_config.method;
+        }
+      } catch (e) {
+        console.warn('加载收款配置异常:', e);
+      }
+    }
+
+    function updateMethodDisplay() {
+      const methodMap = { wechat: '微信零钱', alipay: '支付宝', bank: '银行卡' };
+      const matched = userConfigs.find(c => c.method === selectedMethod);
+      const text = matched ? `${methodMap[selectedMethod]} (${matched.account_masked})` : `${methodMap[selectedMethod]}`;
+      document.getElementById('scan-account-text').innerText = text;
+
+      document.querySelectorAll('#scan-method-chips .method-chip').forEach(chip => {
+        if (chip.dataset.method === selectedMethod) {
+          chip.classList.add('active');
+        } else {
+          chip.classList.remove('active');
+        }
+      });
+    }
+
+    document.querySelectorAll('#scan-method-chips .method-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        selectedMethod = chip.dataset.method;
+        updateMethodDisplay();
+      });
+    });
+
+    // 确认支付并创建订单
+    document.getElementById('btn-scan-confirm-pay').addEventListener('click', async () => {
+      if (!currentResult) return;
+
+      Loading.show('正在发起支付与提现申请...');
+      try {
+        const matched = userConfigs.find(c => c.method === selectedMethod);
+        const orderPayload = {
+          user_id: StateService.getUserId(),
+          qrcode_id: currentResult.id,
+          amount: currentResult.amount,
+          withdraw_method: selectedMethod,
+          withdraw_account: matched ? matched.account : undefined,
+          real_name: matched ? matched.real_name : undefined,
+          bank_name: matched ? matched.bank_name : undefined
+        };
+
+        const result = await API.post('/order/create', orderPayload);
+        Loading.hide();
+        Toast.success('支付成功，已提交加款申请！');
+
+        StateService.setLastOrderNo(result.order_no);
+
+        // 自动调度模拟流
+        API.post(`/order/simulate-flow/${result.order_no}`).catch(() => {});
+
+        setTimeout(() => {
+          window.location.href = `status.html?orderNo=${result.order_no}`;
+        }, 800);
+
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '支付失败，请重试');
+      }
+    });
+
+    // 关闭弹窗恢复扫码
+    document.getElementById('scan-modal-close').addEventListener('click', () => {
+      document.getElementById('scan-result-modal').style.display = 'none';
+      currentResult = null;
+      initCamera();
+    });
+
+    // 相册选取图片上传
+    const albumInput = document.getElementById('scan-album-input');
+    document.getElementById('btn-switch-album').addEventListener('click', () => {
+      albumInput.click();
+    });
+    document.getElementById('btn-fallback-album')?.addEventListener('click', () => {
+      albumInput.click();
+    });
+
+    albumInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      Loading.show('正在读取图片二维码...');
+      try {
+        const text = await QRScannerService.parseImageFile(file);
+        handleDetectedQr(text);
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '未能识别图片中的二维码');
+      }
+      albumInput.value = '';
+    });
+
+    document.getElementById('btn-retry-camera')?.addEventListener('click', initCamera);
+
+    // 页面离开时停止相机
+    window.addEventListener('beforeunload', () => {
+      QRScannerService.stopCamera();
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadUserConfigs();
+      initCamera();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>扫码支付加款 - 客户提现服务</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="assets/jsqr.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- 顶部极简标题栏 -->
+    <header class="app-header">
+      <div class="header-title-wrap">
+        <div class="app-logo-badge">⚡</div>
+        <h1 class="app-title">扫码支付提现</h1>
+      </div>
+    </header>
+
+    <!-- 主体内容：核心聚焦展示后台配置的二维码图片 -->
+    <main class="app-content">
+      <!-- 核心二维码展示主卡片 -->
+      <div class="clean-qr-card" id="main-qr-box">
+        <!-- 商家与商品说明 -->
+        <div class="clean-merchant-name" id="main-merchant-name">正在加载收款码...</div>
+        <div class="clean-product-sub" id="main-product-name">扫码完成支付后自动触发加款</div>
+
+        <!-- 显眼应付金额 -->
+        <div class="clean-amount-wrap">
+          <span class="clean-amount-symbol">¥</span>
+          <span class="clean-amount-val" id="main-amount">--</span>
+        </div>
+
+        <!-- 核心二维码高质图片展示区 -->
+        <div class="clean-qr-frame">
+          <img id="main-qr-img" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%23999'>加载中</text></svg>" alt="收款二维码" class="clean-qr-img">
+        </div>
+
+        <!-- 扫码说明标签 -->
+        <div class="clean-qr-badge">
+          <span>💬 支持微信 / 支付宝长按识别或扫码支付</span>
+        </div>
+
+        <!-- 提现到账账户提示 -->
+        <div class="clean-target-account">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span id="target-account-icon">💬</span>
+            <span>提现到账: <strong id="target-account-name" style="color: var(--primary-color);">微信零钱</strong></span>
+          </div>
+          <a href="settings.html" style="color: var(--primary-color); text-decoration: underline;">修改 ></a>
+        </div>
+
+        <!-- 主操作按钮：我已支付，立即提现 -->
+        <button type="button" class="btn btn-primary" id="btn-pay-cashout" style="margin-top: 18px;">
+          我已扫码支付，立即提现到账
+        </button>
+
+        <div style="display: flex; justify-content: space-between; width: 100%; margin-top: 14px; font-size: 12px; color: var(--text-muted);">
+          <span>⏱️ 加款秒级自动到账</span>
+          <a href="scan.html" style="color: var(--primary-color); text-decoration: none;">📷 扫描其他码 ></a>
+        </div>
+      </div>
+
+      <!-- 多码快捷切换 (后台配置了多个码时自动显示) -->
+      <div class="ui-card" id="multi-qr-card" style="display: none;">
+        <div class="ui-card-title">
+          <span>切换其他商户收款码</span>
+          <span style="font-size: 11px; color: var(--text-muted);" id="multi-qr-count">共 0 个码</span>
+        </div>
+        <div class="clean-switch-pill" id="qr-switcher-container"></div>
+      </div>
+
+      <!-- 安全保障简要说明 -->
+      <div class="security-box" style="margin-top: 4px;">
+        <span style="font-size: 18px;">🛡️</span>
+        <div>
+          <strong style="color: var(--text-main);">资金与隐私安全保障</strong>
+          <div>收款账户信息已通过 AES-256 标准加密保护，仅用于本次扫码提现原路打款。</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 底部导航 -->
+    <nav class="app-nav">
+      <a href="index.html" class="nav-item active">
+        <div class="nav-icon">💳</div>
+        <span>收款码</span>
+      </a>
+      <a href="status.html" class="nav-item">
+        <div class="nav-icon">📊</div>
+        <span>订单进度</span>
+      </a>
+      <a href="settings.html" class="nav-item">
+        <div class="nav-icon">⚙️</div>
+        <span>收款配置</span>
+      </a>
+    </nav>
+  </div>
+
+  <!-- 确认支付与提现弹窗 -->
+  <div id="confirm-pay-modal" class="modal-mask" style="display: none;">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h3 class="modal-title">确认支付与提现</h3>
+        <button class="close-btn" id="modal-close-btn">&times;</button>
+      </div>
+
+      <div class="pay-amount-display">
+        <div class="pay-amount-label">应提现加款金额</div>
+        <div class="pay-amount-value">
+          <span class="pay-amount-symbol">¥</span><span id="confirm-amount">0.00</span>
+        </div>
+      </div>
+
+      <div class="info-rows">
+        <div class="info-row">
+          <span class="info-row-label">收款商户</span>
+          <span class="info-row-val" id="confirm-merchant">--</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row-label">商品项目</span>
+          <span class="info-row-val" id="confirm-product">--</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row-label">加款入账账户</span>
+          <span class="info-row-val" id="confirm-account-text" style="color: var(--primary-color);">微信零钱</span>
+        </div>
+      </div>
+
+      <div>
+        <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);">选择提现到账方式：</label>
+        <div class="method-chips" id="confirm-method-chips">
+          <div class="method-chip active" data-method="wechat">💬 微信</div>
+          <div class="method-chip" data-method="alipay">🔵 支付宝</div>
+          <div class="method-chip" data-method="bank">🏦 银行卡</div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="btn-submit-order" style="margin-top: 14px;">
+        确认已扫码支付，立即自动提现
+      </button>
+    </div>
+  </div>
+
+  <script src="assets/app.js"></script>
+  <script>
+    let activeQrData = null;
+    let allQrcodes = [];
+    let selectedMethod = 'wechat';
+    let userConfigs = [];
+
+    // 1. 加载后台配置的当前主推二维码
+    async function loadActiveQRCode() {
+      try {
+        const res = await API.get('/merchant/active');
+        if (res) {
+          renderQRCode(res);
+        } else {
+          document.getElementById('main-merchant-name').innerText = '暂无已配置的收款码';
+          document.getElementById('main-product-name').innerText = '请登录后台上传二维码图片';
+        }
+      } catch (err) {
+        console.warn('获取当前收款码失败:', err);
+        document.getElementById('main-merchant-name').innerText = '无法加载收款码';
+      }
+    }
+
+    // 2. 加载所有可用二维码（供切换选择）
+    async function loadAllQRCodes() {
+      try {
+        const list = await API.get('/merchant/qrcodes');
+        allQrcodes = list || [];
+        if (allQrcodes.length > 1) {
+          const container = document.getElementById('qr-switcher-container');
+          document.getElementById('multi-qr-card').style.display = 'block';
+          document.getElementById('multi-qr-count').innerText = `共 ${allQrcodes.length} 个收款码`;
+          container.innerHTML = allQrcodes.map(item => `
+            <button class="btn btn-secondary btn-sm ${activeQrData && activeQrData.id === item.id ? 'active' : ''}" 
+                    style="height: 30px; font-size: 12px; padding: 0 10px;"
+                    onclick="switchQRCode(${item.id})">
+              ${item.merchant_name} (¥${item.amount.toFixed(2)})
+            </button>
+          `).join('');
+        }
+      } catch (e) {
+        console.warn('加载商户列表失败:', e);
+      }
+    }
+
+    // 渲染二维码信息到界面
+    function renderQRCode(data) {
+      activeQrData = data;
+      document.getElementById('main-merchant-name').innerText = data.merchant_name;
+      document.getElementById('main-product-name').innerText = data.product_name || '扫码完成支付后自动触发加款';
+      document.getElementById('main-amount').innerText = Number(data.amount).toFixed(2);
+      if (data.qr_image_url) {
+        document.getElementById('main-qr-img').src = data.qr_image_url;
+      }
+    }
+
+    // 切换选中的二维码
+    window.switchQRCode = function(id) {
+      const target = allQrcodes.find(q => q.id === id);
+      if (target) {
+        renderQRCode(target);
+        loadAllQRCodes();
+      }
+    };
+
+    // 3. 加载用户默认到账账户
+    async function loadUserConfigs() {
+      try {
+        const userId = StateService.getUserId();
+        const data = await API.get(`/user/config/${userId}`);
+        userConfigs = data.configs || [];
+        if (data.default_config) {
+          selectedMethod = data.default_config.method;
+        }
+        updateAccountBadgeDisplay();
+      } catch (e) {
+        console.warn('加载收款配置异常:', e);
+      }
+    }
+
+    function updateAccountBadgeDisplay() {
+      const methodMap = { wechat: '微信零钱', alipay: '支付宝', bank: '银行卡' };
+      const iconMap = { wechat: '💬', alipay: '🔵', bank: '🏦' };
+      const matched = userConfigs.find(c => c.method === selectedMethod);
+
+      document.getElementById('target-account-icon').innerText = iconMap[selectedMethod] || '💳';
+      const text = matched ? `${methodMap[selectedMethod]} (${matched.account_masked})` : `${methodMap[selectedMethod]}`;
+      document.getElementById('target-account-name').innerText = text;
+
+      // 弹窗中同步
+      if (document.getElementById('confirm-account-text')) {
+        document.getElementById('confirm-account-text').innerText = text;
+      }
+      document.querySelectorAll('#confirm-method-chips .method-chip').forEach(chip => {
+        if (chip.dataset.method === selectedMethod) {
+          chip.classList.add('active');
+        } else {
+          chip.classList.remove('active');
+        }
+      });
+    }
+
+    // 提现方式切换事件
+    document.querySelectorAll('#confirm-method-chips .method-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        selectedMethod = chip.dataset.method;
+        updateAccountBadgeDisplay();
+      });
+    });
+
+    // 4. 点击“我已扫码支付，立即提现到账”打开确认弹窗
+    document.getElementById('btn-pay-cashout').addEventListener('click', () => {
+      if (!activeQrData) {
+        Toast.warning('收款码尚未加载，请稍候');
+        return;
+      }
+
+      document.getElementById('confirm-amount').innerText = Number(activeQrData.amount).toFixed(2);
+      document.getElementById('confirm-merchant').innerText = activeQrData.merchant_name;
+      document.getElementById('confirm-product').innerText = activeQrData.product_name || '扫码支付加款';
+      updateAccountBadgeDisplay();
+
+      document.getElementById('confirm-pay-modal').style.display = 'flex';
+    });
+
+    document.getElementById('modal-close-btn').addEventListener('click', () => {
+      document.getElementById('confirm-pay-modal').style.display = 'none';
+    });
+
+    // 5. 确认提交订单并触发提现
+    document.getElementById('btn-submit-order').addEventListener('click', async () => {
+      if (!activeQrData) return;
+
+      Loading.show('正在提交支付确认与提现申请...');
+      try {
+        const matched = userConfigs.find(c => c.method === selectedMethod);
+        const orderPayload = {
+          user_id: StateService.getUserId(),
+          qrcode_id: activeQrData.id,
+          amount: activeQrData.amount,
+          withdraw_method: selectedMethod,
+          withdraw_account: matched ? matched.account : undefined,
+          real_name: matched ? matched.real_name : undefined,
+          bank_name: matched ? matched.bank_name : undefined
+        };
+
+        const result = await API.post('/order/create', orderPayload);
+        Loading.hide();
+        Toast.success('提交成功！正在处理自动加款');
+
+        StateService.setLastOrderNo(result.order_no);
+
+        // 自动调度模拟出款流
+        API.post(`/order/simulate-flow/${result.order_no}`).catch(() => {});
+
+        setTimeout(() => {
+          window.location.href = `status.html?orderNo=${result.order_no}`;
+        }, 600);
+
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '提交失败，请重试');
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadActiveQRCode();
+      await loadAllQRCodes();
+      await loadUserConfigs();
+    });
+  </script>
+</body>
+</html>

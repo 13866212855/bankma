@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>后台管理控制台 - 客户扫码提现</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="assets/jsqr.js"></script>
+  <style>
+    /* 管理后台响应式布局与样式扩展 */
+    body {
+      background-color: #F1F5F9;
+    }
+    .admin-wrapper {
+      max-width: 960px;
+      margin: 0 auto;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+    }
+    .admin-header {
+      background: #FFFFFF;
+      padding: 16px 20px;
+      border-radius: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border-color);
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .admin-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .admin-brand h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin: 0;
+    }
+    .admin-header-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .admin-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: #FFFFFF;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 14px 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .stat-card-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .stat-card-val {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+    .admin-card {
+      background: #FFFFFF;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .admin-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+    }
+    .admin-card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    /* 拖拽上传区 */
+    .dropzone-box {
+      border: 2px dashed #CBD5E1;
+      border-radius: 10px;
+      padding: 24px 16px;
+      text-align: center;
+      background: #F8FAFC;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .dropzone-box:hover, .dropzone-box.dragover {
+      border-color: var(--primary-color);
+      background: #EEF2FF;
+    }
+    .preview-image-container {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      margin-top: 12px;
+      padding: 12px;
+      background: #F8FAFC;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+    }
+    .preview-thumb {
+      width: 100px;
+      height: 100px;
+      object-fit: contain;
+      background: #FFFFFF;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 4px;
+    }
+    /* 二维码列表表格/网格 */
+    .qr-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .qr-table th, .qr-table td {
+      padding: 12px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+    .qr-table th {
+      background: #F8FAFC;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .qr-table-thumb {
+      width: 54px;
+      height: 54px;
+      object-fit: contain;
+      background: #FFFFFF;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 2px;
+    }
+    .status-badge-active {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #065F46;
+      background: #D1FAE5;
+      padding: 3px 8px;
+      border-radius: 9999px;
+    }
+    .status-badge-inactive {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #64748B;
+      background: #F1F5F9;
+      padding: 3px 8px;
+      border-radius: 9999px;
+    }
+    /* 登录弹窗居中卡片 */
+    .login-container {
+      max-width: 400px;
+      margin: 80px auto;
+      background: #FFFFFF;
+      padding: 32px 24px;
+      border-radius: 16px;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--border-color);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. 登录视图 (未登录时显示) -->
+  <div id="view-login" class="login-container" style="display: none;">
+    <div style="text-align: center; margin-bottom: 24px;">
+      <div style="font-size: 36px; margin-bottom: 8px;">🔐</div>
+      <h2 style="font-size: 20px; font-weight: 700; color: var(--text-main); margin: 0;">管理员后台登录</h2>
+      <p style="font-size: 13px; color: var(--text-muted); margin-top: 6px;">
+        配置与上传供前端展示识别的二维码
+      </p>
+    </div>
+
+    <form id="admin-login-form">
+      <div class="form-group">
+        <label class="form-label">管理员账号</label>
+        <input type="text" id="login-username" class="form-input" placeholder="请输入管理员账号" autocomplete="username" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">管理员密码</label>
+        <input type="password" id="login-password" class="form-input" placeholder="请输入管理员密码" autocomplete="current-password" required>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="btn-submit-login" style="margin-top: 8px;">
+        立即登录后台
+      </button>
+
+      <div style="margin-top: 16px; text-align: center;">
+        <a href="index.html" style="font-size: 13px; color: var(--text-muted); text-decoration: none;">← 返回前台主页</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- 2. 管理面板主视图 (登录成功后显示) -->
+  <div id="view-dashboard" class="admin-wrapper" style="display: none;">
+    <!-- 顶部导航栏 -->
+    <header class="admin-header">
+      <div class="admin-brand">
+        <span style="font-size: 24px;">⚙️</span>
+        <div>
+          <h1>收款码与出款管理后台</h1>
+          <span style="font-size: 12px; color: var(--text-muted);">当前登录：admin (超级管理员)</span>
+        </div>
+      </div>
+      <div class="admin-header-actions">
+        <a href="index.html" target="_blank" class="btn btn-secondary btn-sm" style="height: 34px;">
+          📱 打开前台界面
+        </a>
+        <button id="btn-admin-logout" class="btn btn-secondary btn-sm" style="height: 34px; color: var(--danger-color);">
+          退出登录
+        </button>
+      </div>
+    </header>
+
+    <!-- 概览统计 -->
+    <div class="admin-stats-grid">
+      <div class="stat-card">
+        <div class="stat-card-title">收款二维码总数</div>
+        <div class="stat-card-val" id="stat-total-qrs">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-title">当前前端展示码</div>
+        <div class="stat-card-val" id="stat-active-merchant" style="font-size: 16px; color: var(--primary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-title">累计提现订单</div>
+        <div class="stat-card-val" id="stat-total-orders">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-title">已完成出款加款</div>
+        <div class="stat-card-val" id="stat-completed-amount" style="color: var(--success-color);">¥0.00</div>
+      </div>
+    </div>
+
+    <!-- 模块一：上传/配置供前端展示与识别的二维码 -->
+    <div class="admin-card">
+      <div class="admin-card-header">
+        <div class="admin-card-title">
+          <span>📤 上传收款二维码图片 (供前端展示与识别)</span>
+        </div>
+        <span style="font-size: 12px; color: var(--primary-color);">保存后前端首页即时更新</span>
+      </div>
+
+      <form id="upload-qr-form">
+        <!-- 拖拽/点击上传图片区 -->
+        <div class="dropzone-box" id="qr-dropzone">
+          <input type="file" id="qr-file-input" accept="image/*" style="display: none;">
+          <div style="font-size: 32px;">🖼️</div>
+          <div style="font-size: 14px; font-weight: 600; color: var(--text-main);">
+            点击或将二维码图片拖拽到此处上传
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted);">
+            支持 PNG、JPG、JPEG、WEBP 格式收款码图片，系统将自动进行解码识别
+          </div>
+        </div>
+
+        <!-- 图片预览与解析状态 (默认隐藏) -->
+        <div id="preview-box" class="preview-image-container" style="display: none;">
+          <img id="preview-img" src="" alt="预览" class="preview-thumb">
+          <div style="flex: 1;">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-main);" id="preview-filename">已选择二维码图片</div>
+            <div style="font-size: 12px; color: var(--success-color); margin-top: 4px;" id="preview-decode-status">
+              ✅ 已通过 jsQR 自动提取二维码解码内容
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-reselect-img" style="margin-top: 6px; height: 28px;">重新选择图片</button>
+          </div>
+        </div>
+
+        <!-- 详细表单参数 -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 16px;">
+          <div class="form-group">
+            <label class="form-label">商家名称 <span style="color: var(--danger-color);">*</span></label>
+            <input type="text" id="input-merchant-name" class="form-input" placeholder="例如: 瑞幸咖啡(朝阳大悦城店) / 官方收款商户" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">应付金额 (元) <span style="color: var(--danger-color);">*</span></label>
+            <input type="number" id="input-amount" class="form-input" placeholder="例如: 9.90 / 28.50" step="0.01" min="0.01" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">商品名称 / 收款备注</label>
+            <input type="text" id="input-product-name" class="form-input" placeholder="例如: 扫码支付加款 / 冰吸生椰拿铁" value="扫码支付加款">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">二维码识别内容 (解析后自动填充)</label>
+            <input type="text" id="input-qr-content" class="form-input" placeholder="上传图片后自动识别，也可手动指定">
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding: 8px 0;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600;">
+            <input type="checkbox" id="check-is-active" checked style="width: 18px; height: 18px; accent-color: var(--primary-color);">
+            设为当前前端主推展示的二维码 (首页优先显示)
+          </label>
+          <button type="submit" class="btn btn-primary" id="btn-submit-upload" style="width: 200px;">
+            保存并发布到前端
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 模块二：二维码列表管理 -->
+    <div class="admin-card">
+      <div class="admin-card-header">
+        <div class="admin-card-title">
+          <span>📋 已配置的二维码列表</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btn-refresh-qrs">刷新列表</button>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table class="qr-table">
+          <thead>
+            <tr>
+              <th style="width: 70px;">图片</th>
+              <th>商家名称</th>
+              <th>商品 / 备注</th>
+              <th>金额</th>
+              <th>当前状态</th>
+              <th>识别码串</th>
+              <th style="width: 160px; text-align: right;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="qr-table-body">
+            <tr>
+              <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">加载中...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 模块三：最新提现加款订单流 -->
+    <div class="admin-card">
+      <div class="admin-card-header">
+        <div class="admin-card-title">
+          <span>📊 客户提现订单流水</span>
+        </div>
+        <span style="font-size: 12px; color: var(--text-muted);">实时监控客户支付提现记录</span>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table class="qr-table">
+          <thead>
+            <tr>
+              <th>订单号</th>
+              <th>金额</th>
+              <th>商户信息</th>
+              <th>提现方式</th>
+              <th>到账账户</th>
+              <th>加款状态</th>
+              <th style="text-align: right;">模拟测试操作</th>
+            </tr>
+          </thead>
+          <tbody id="orders-table-body">
+            <tr>
+              <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">加载订单中...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/app.js"></script>
+  <script>
+    const ADMIN_TOKEN_KEY = 'cashout_admin_token';
+    let currentUploadedImageDataUrl = '';
+
+    // 获取当前 Token
+    function getAdminToken() {
+      return localStorage.getItem(ADMIN_TOKEN_KEY);
+    }
+
+    // 设置 Token
+    function setAdminToken(token) {
+      if (token) {
+        localStorage.setItem(ADMIN_TOKEN_KEY, token);
+      } else {
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
+      }
+    }
+
+    // 统一 Admin API 请求包装
+    async function adminRequest(url, options = {}) {
+      const token = getAdminToken();
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(options.headers || {})
+      };
+
+      const res = await fetch(url, { ...options, headers });
+      const json = await res.json();
+      if (!res.ok || json.code !== 200) {
+        if (res.status === 401 || json.code === 401) {
+          setAdminToken(null);
+          showLoginView();
+        }
+        throw new Error(json.message || '请求失败');
+      }
+      return json.data;
+    }
+
+    // 检查登录态
+    async function checkAuth() {
+      const token = getAdminToken();
+      if (!token) {
+        showLoginView();
+        return;
+      }
+      try {
+        await adminRequest('/api/admin/check');
+        showDashboardView();
+        loadAllData();
+      } catch (e) {
+        showLoginView();
+      }
+    }
+
+    function showLoginView() {
+      document.getElementById('view-login').style.display = 'block';
+      document.getElementById('view-dashboard').style.display = 'none';
+    }
+
+    function showDashboardView() {
+      document.getElementById('view-login').style.display = 'none';
+      document.getElementById('view-dashboard').style.display = 'block';
+    }
+
+    // 登录处理
+    document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const u = document.getElementById('login-username').value.trim();
+      const p = document.getElementById('login-password').value.trim();
+
+      Loading.show('正在验证管理员凭证...');
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: u, password: p })
+        });
+        const json = await res.json();
+        Loading.hide();
+
+        if (json.code === 200 && json.data && json.data.token) {
+          Toast.success('登录成功，欢迎管理员！');
+          setAdminToken(json.data.token);
+          showDashboardView();
+          loadAllData();
+        } else {
+          Toast.error(json.message || '登录失败，请检查账号密码');
+        }
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '登录服务异常');
+      }
+    });
+
+    // 登出处理
+    document.getElementById('btn-admin-logout').addEventListener('click', async () => {
+      try {
+        await adminRequest('/api/admin/logout', { method: 'POST' });
+      } catch (e) {}
+      setAdminToken(null);
+      Toast.info('已退出管理后台');
+      showLoginView();
+    });
+
+    // 加载概览统计、列表和订单
+    async function loadAllData() {
+      loadStats();
+      loadQrList();
+      loadOrders();
+    }
+
+    // 加载统计
+    async function loadStats() {
+      try {
+        const stats = await adminRequest('/api/admin/stats');
+        document.getElementById('stat-total-qrs').innerText = stats.total_qrcodes;
+        document.getElementById('stat-total-orders').innerText = stats.total_orders;
+        document.getElementById('stat-completed-amount').innerText = '¥' + stats.completed_amount.toFixed(2);
+      } catch (err) {
+        console.warn('统计数据加载异常:', err);
+      }
+    }
+
+    // 加载二维码列表
+    async function loadQrList() {
+      const tbody = document.getElementById('qr-table-body');
+      try {
+        const data = await adminRequest('/api/admin/qrcodes');
+        const items = data.items || [];
+
+        const activeItem = items.find(i => i.is_active);
+        document.getElementById('stat-active-merchant').innerText = activeItem ? activeItem.merchant_name : '未设置';
+
+        if (items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">暂无已配置的二维码，请在上方上传</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = items.map(item => `
+          <tr>
+            <td>
+              <img src="${item.qr_image_url}" class="qr-table-thumb" alt="QR" onclick="viewLargeImage('${item.qr_image_url}')">
+            </td>
+            <td>
+              <strong style="color: var(--text-main);">${item.merchant_name}</strong>
+            </td>
+            <td>${item.product_name}</td>
+            <td style="font-weight: 700; color: var(--primary-color);">¥${item.amount.toFixed(2)}</td>
+            <td>
+              ${item.is_active ? 
+                '<span class="status-badge-active">🟢 前端展示中</span>' : 
+                '<span class="status-badge-inactive">⚪ 未激活</span>'
+              }
+            </td>
+            <td style="font-family: monospace; font-size: 11px; color: var(--text-muted); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              ${item.qr_content}
+            </td>
+            <td style="text-align: right;">
+              ${!item.is_active ? `
+                <button class="btn btn-secondary btn-sm" style="height: 28px; padding: 0 8px; margin-right: 4px;" onclick="setActiveQr(${item.id})">
+                  设为前端展示
+                </button>
+              ` : '<span style="font-size: 12px; color: var(--success-color); margin-right: 8px;">当前主码</span>'}
+              <button class="btn btn-secondary btn-sm" style="height: 28px; padding: 0 8px; color: var(--danger-color);" onclick="deleteQr(${item.id})">
+                删除
+              </button>
+            </td>
+          </tr>
+        `).join('');
+
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color: var(--danger-color); text-align: center;">加载失败: ${err.message}</td></tr>`;
+      }
+    }
+
+    // 查看大图
+    window.viewLargeImage = function(url) {
+      const w = window.open('', '_blank');
+      w.document.write(`<body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#0F172A;"><img src="${url}" style="max-width:90%;max-height:90%;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,0.5);"></body>`);
+    };
+
+    // 设为激活
+    window.setActiveQr = async function(id) {
+      Loading.show('正在设置主推展示码...');
+      try {
+        await adminRequest(`/api/admin/qrcode/${id}/set-active`, { method: 'PUT' });
+        Loading.hide();
+        Toast.success('设置成功！前端首页已即时切换为该二维码');
+        loadAllData();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '设置失败');
+      }
+    };
+
+    // 删除二维码
+    window.deleteQr = async function(id) {
+      if (!confirm('确定要删除该收款二维码吗？删除后前端将无法继续识别该码。')) return;
+      Loading.show('正在删除...');
+      try {
+        await adminRequest(`/api/admin/qrcode/${id}`, { method: 'DELETE' });
+        Loading.hide();
+        Toast.success('删除成功');
+        loadAllData();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '删除失败');
+      }
+    };
+
+    // 加载订单列表
+    async function loadOrders() {
+      const tbody = document.getElementById('orders-table-body');
+      try {
+        const orders = await adminRequest('/api/admin/orders');
+        if (!orders || orders.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">暂无提现订单记录</td></tr>';
+          return;
+        }
+
+        const methodMap = { wechat: '💬 微信', alipay: '🔵 支付宝', bank: '🏦 银行卡' };
+
+        tbody.innerHTML = orders.map(o => `
+          <tr>
+            <td style="font-family: monospace; font-size: 12px; font-weight: 600;">${o.order_no}</td>
+            <td style="font-weight: 700; color: var(--primary-color);">¥${o.amount.toFixed(2)}</td>
+            <td>${o.merchant_name || '商户'} (${o.product_name || '加款'})</td>
+            <td>${methodMap[o.withdraw_method] || o.withdraw_method}</td>
+            <td style="font-family: monospace; font-size: 12px;">${o.withdraw_account_masked}</td>
+            <td>
+              ${o.process_status === 'completed' ? 
+                '<span class="status-badge-active">✅ 加款完成</span>' : 
+                (o.process_status === 'processing' ? '<span style="color: #4F46E5; font-weight: 600;">⏳ 处理中</span>' : '<span style="color: #B45309; font-weight: 600;">⏱️ 待处理</span>')
+              }
+            </td>
+            <td style="text-align: right;">
+              ${o.process_status === 'pending' ? `
+                <button class="btn btn-secondary btn-sm" style="height: 26px; font-size: 11px; padding: 0 6px;" onclick="simulateOrderProcess('${o.order_no}')">
+                  接单处理
+                </button>
+              ` : ''}
+              ${o.process_status !== 'completed' ? `
+                <button class="btn btn-primary btn-sm" style="height: 26px; font-size: 11px; padding: 0 6px; background-color: var(--success-color);" onclick="simulateOrderComplete('${o.order_no}')">
+                  完成加款
+                </button>
+              ` : '<span style="font-size: 12px; color: var(--success-color);">资金已到账</span>'}
+            </td>
+          </tr>
+        `).join('');
+
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color: var(--danger-color); text-align: center;">订单加载异常: ${err.message}</td></tr>`;
+      }
+    }
+
+    window.simulateOrderProcess = async function(orderNo) {
+      try {
+        await API.put(`/order/process/${orderNo}`);
+        Toast.success('状态已流转为【处理中】');
+        loadOrders();
+      } catch (e) {
+        Toast.error(e.message || '操作失败');
+      }
+    };
+
+    window.simulateOrderComplete = async function(orderNo) {
+      try {
+        await API.put(`/order/complete/${orderNo}`);
+        Toast.success('状态已流转为【加款成功】');
+        loadOrders();
+        loadStats();
+      } catch (e) {
+        Toast.error(e.message || '操作失败');
+      }
+    };
+
+    // 拖拽与文件上传处理
+    const dropzone = document.getElementById('qr-dropzone');
+    const fileInput = document.getElementById('qr-file-input');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    document.getElementById('btn-reselect-img').addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.classList.remove('dragover');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        processUploadedImage(e.dataTransfer.files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        processUploadedImage(e.target.files[0]);
+      }
+    });
+
+    // 处理选中的二维码图片
+    async function processUploadedImage(file) {
+      Loading.show('正在读取并解码二维码图片...');
+      try {
+        // 读取为 Data URL
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        currentUploadedImageDataUrl = dataUrl;
+
+        // 尝试用 jsQR 自动提取二维码内容
+        let detectedCode = '';
+        try {
+          detectedCode = await QRScannerService.parseImageFile(file);
+        } catch (e) {
+          console.warn('本地 jsQR 未能识别出明文码串:', e);
+        }
+
+        // 显示预览
+        document.getElementById('preview-img').src = dataUrl;
+        document.getElementById('preview-filename').innerText = file.name;
+        document.getElementById('preview-box').style.display = 'flex';
+        dropzone.style.display = 'none';
+
+        if (detectedCode) {
+          document.getElementById('preview-decode-status').innerHTML = '✅ 已通过 jsQR 自动识别出二维码内容：<strong>' + detectedCode + '</strong>';
+          document.getElementById('input-qr-content').value = detectedCode;
+          // 若有包含数字可尝试猜金额
+          const matchAmount = detectedCode.match(/(\d+\.\d{2})/);
+          if (matchAmount && !document.getElementById('input-amount').value) {
+            document.getElementById('input-amount').value = matchAmount[1];
+          }
+        } else {
+          document.getElementById('preview-decode-status').innerHTML = 'ℹ️ 已加载图片。如为特殊样式二维码，系统将自动分配全局识别码。';
+          if (!document.getElementById('input-qr-content').value) {
+            document.getElementById('input-qr-content').value = 'MCH_UPLOAD_' + Date.now();
+          }
+        }
+
+        Loading.hide();
+        Toast.success('图片上传解析成功');
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '图片读取失败');
+      }
+    }
+
+    // 提交二维码保存
+    document.getElementById('upload-qr-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const merchant_name = document.getElementById('input-merchant-name').value.trim();
+      const amount = document.getElementById('input-amount').value.trim();
+      const product_name = document.getElementById('input-product-name').value.trim() || '扫码支付加款';
+      const qr_content = document.getElementById('input-qr-content').value.trim();
+      const is_active = document.getElementById('check-is-active').checked;
+
+      if (!merchant_name || !amount) {
+        return Toast.error('请填写商家名称与金额');
+      }
+
+      Loading.show('正在保存二维码配置并推送到前端...');
+      try {
+        await adminRequest('/api/admin/qrcode', {
+          method: 'POST',
+          body: JSON.stringify({
+            merchant_name,
+            product_name,
+            amount: parseFloat(amount),
+            qr_content,
+            qr_image_url: currentUploadedImageDataUrl || undefined,
+            is_active
+          })
+        });
+
+        Loading.hide();
+        Toast.success('🎉 成功上传并发布！前端首页已即时更新');
+
+        // 重置表单
+        document.getElementById('upload-qr-form').reset();
+        currentUploadedImageDataUrl = '';
+        document.getElementById('preview-box').style.display = 'none';
+        dropzone.style.display = 'flex';
+        document.getElementById('check-is-active').checked = true;
+
+        loadAllData();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '保存失败');
+      }
+    });
+
+    document.getElementById('btn-refresh-qrs').addEventListener('click', () => {
+      loadAllData();
+      Toast.info('数据已刷新');
+    });
+
+    document.addEventListener('DOMContentLoaded', checkAuth);
+  </script>
+</body>
+</html>
