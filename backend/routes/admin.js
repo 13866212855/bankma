@@ -9,6 +9,7 @@ const QRCode = require('qrcode');
 const { query } = require('../models/db');
 const { maskAccount, decrypt } = require('../utils/crypto');
 const { sendTestEmail } = require('../utils/email');
+const { generateTTSAudio } = require('../utils/tts');
 
 // 简单高效的管理端 Token 缓存
 const activeAdminTokens = new Set(['admin_dev_token_secret_123']);
@@ -532,5 +533,133 @@ router.post('/email/test', requireAdmin, async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * 生成 1 秒 16-bit PCM 静音 WAV 缓存 Buffer (用于后台 <audio loop> 媒体保活)
+ */
+function createSilentWavBuffer() {
+  const sampleRate = 8000;
+  const numSamples = 8000;
+  const buffer = Buffer.alloc(44 + numSamples * 2);
+  buffer.write('RIFF', 0);
+  buffer.writeUInt32LE(36 + numSamples * 2, 4);
+  buffer.write('WAVE', 8);
+  buffer.write('fmt ', 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20); // PCM
+  buffer.writeUInt16LE(1, 22); // mono
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write('data', 36);
+  buffer.writeUInt32LE(numSamples * 2, 40);
+  return buffer;
+}
+const cachedSilentWav = createSilentWavBuffer();
+
+/**
+ * 生成清脆悦耳的 4 音阶和弦到单通知 WAV Buffer
+ */
+function createChimeWavBuffer() {
+  const sampleRate = 22050;
+  const duration = 0.85;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = Buffer.alloc(44 + numSamples * 2);
+
+  buffer.write('RIFF', 0);
+  buffer.writeUInt32LE(36 + numSamples * 2, 4);
+  buffer.write('WAVE', 8);
+  buffer.write('fmt ', 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write('data', 36);
+  buffer.writeUInt32LE(numSamples * 2, 40);
+
+  const notes = [
+    { freq: 523.25, start: 0, dur: 0.25 },
+    { freq: 659.25, start: 0.12, dur: 0.25 },
+    { freq: 783.99, start: 0.24, dur: 0.3 },
+    { freq: 1046.5, start: 0.36, dur: 0.45 }
+  ];
+
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    let sample = 0;
+    for (const n of notes) {
+      if (t >= n.start && t < n.start + n.dur) {
+        const dt = t - n.start;
+        const env = Math.exp(-dt * 8);
+        sample += Math.sin(2 * Math.PI * n.freq * dt) * env * 0.4;
+      }
+    }
+    const intVal = Math.max(-32768, Math.min(32767, Math.floor(sample * 32767)));
+    buffer.writeInt16LE(intVal, 44 + i * 2);
+  }
+  return buffer;
+}
+const cachedChimeWav = createChimeWavBuffer();
+
+/**
+ * GET /api/admin/audio/silent.wav
+ * 后台保活静音音轨 (循环播放阻止移动端/微信休眠)
+ */
+router.get('/audio/silent.wav', (req, res) => {
+  res.set({
+    'Content-Type': 'audio/wav',
+    'Content-Length': cachedSilentWav.length,
+    'Cache-Control': 'public, max-age=86400',
+    'Accept-Ranges': 'bytes'
+  });
+  res.end(cachedSilentWav);
+});
+
+/**
+ * GET /api/admin/audio/chime.wav
+ * 到单清脆通知音 (兼容后台媒体音频播放)
+ */
+router.get('/audio/chime.wav', (req, res) => {
+  res.set({
+    'Content-Type': 'audio/wav',
+    'Content-Length': cachedChimeWav.length,
+    'Cache-Control': 'public, max-age=86400',
+    'Accept-Ranges': 'bytes'
+  });
+  res.end(cachedChimeWav);
+});
+
+/**
+ * GET /api/admin/tts
+ * POST /api/admin/tts
+ * 语音 TTS MP3 流分发 (支持真实 <audio> 播放，移动端切到微信后台依旧能说话)
+ */
+async function handleTTS(req, res, next) {
+  try {
+    const text = req.query.text || req.body?.text || '';
+    if (!text || !text.trim()) {
+      return res.status(400).json({ code: 400, message: '请提供要播报的文本' });
+    }
+
+    const audioBuf = await generateTTSAudio(text.trim());
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': audioBuf.length,
+      'Cache-Control': 'public, max-age=3600',
+      'Accept-Ranges': 'bytes'
+    });
+    return res.end(audioBuf);
+  } catch (err) {
+    console.error('[Admin TTS] 合成异常:', err.message);
+    return res.status(500).json({ code: 500, message: `语音合成失败: ${err.message}` });
+  }
+}
+
+router.get('/tts', handleTTS);
+router.post('/tts', handleTTS);
 
 module.exports = router;

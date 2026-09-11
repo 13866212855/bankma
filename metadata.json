@@ -1,6 +1,6 @@
 {
   "name": "客户扫码提现",
-  "description": "客户扫码完成支付后自动触发提现/加款流程的全栈 H5 移动端应用",
+  "description": "客户扫码完成支付后自动触发提现/加款流程的全栈 H5 移动端应用，支持后台保活与全字段语音播报（包含支付通道、客户姓名、提现方式、账号与金额）",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

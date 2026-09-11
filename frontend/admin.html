@@ -320,30 +320,55 @@
 
     <!-- 主体内容区 -->
     <main class="app-content" style="padding: 14px 16px;">
-      <!-- mynotice 声信协同全天候零漏单提醒控制中心 -->
-      <div class="mynotice-card" style="background: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.04);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+      <!-- mynotice 声信协同全天候零漏单提醒控制中心 (含微信/手机后台保活与全字段语音播报) -->
+      <div class="mynotice-card" style="background: #FFFFFF; border: 1.5px solid #CBD5E1; border-radius: 14px; padding: 14px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="font-size: 16px;">🔔</span>
-            <span style="font-size: 13px; font-weight: 700; color: var(--text-main);">mynotice 声信协同零漏单提醒</span>
-            <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: #059669; background: #D1FAE5; padding: 2px 8px; border-radius: 9999px; font-weight: 600;">
-              <span style="width: 6px; height: 6px; background: #10B981; border-radius: 50%; display: inline-block;"></span> 5秒自动监听
-            </span>
+            <span style="font-size: 18px;">🔔</span>
+            <div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 13px; font-weight: 700; color: var(--text-main);">mynotice 声信协同零漏单系统</span>
+                <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: #059669; background: #D1FAE5; padding: 1px 6px; border-radius: 9999px; font-weight: 600;">
+                  <span style="width: 6px; height: 6px; background: #10B981; border-radius: 50%; display: inline-block;"></span> 4.5秒独立线程监听
+                </span>
+              </div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 1px;">详细播报客户姓名、支付通道、提现方式、打款账号与金额</div>
+            </div>
           </div>
-          <div style="font-size: 11px; color: var(--text-muted);" id="poll-indicator">已就绪</div>
+          <div style="font-size: 11px; color: var(--text-muted); font-family: monospace;" id="poll-indicator">已就绪</div>
+        </div>
+
+        <!-- 微信与手机后台运行保活高亮条 -->
+        <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 20px;">📱</span>
+            <div>
+              <div style="font-size: 12px; font-weight: 700; color: #166534;" id="keepalive-status-text">
+                后台保活运行模式: <span style="color: #059669;">🟢 已激活 (切到微信持续发声)</span>
+              </div>
+              <div style="font-size: 11px; color: #15803D;">
+                切到微信聊天、切换其它App或锁屏时，只要手机浏览器保留此后台页面，新订单仍会自动语音发声！
+              </div>
+            </div>
+          </div>
+          <button type="button" id="btn-activate-keepalive" class="btn btn-sm" style="background: #059669; color: #FFF; border: none; font-size: 11px; height: 28px; padding: 0 10px; font-weight: 600; white-space: nowrap; border-radius: 6px; flex-shrink: 0;">
+            ⚡ 激活微信保活
+          </button>
         </div>
 
         <!-- 两个核心渠道状态与控制 -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <!-- 渠道 1: 声音与中文语音合成播报 -->
+          <!-- 渠道 1: 声音与全字段中文语音播报 -->
           <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 10px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <span style="font-size: 12px; font-weight: 700; color: #1E293B;" id="sound-status-text">🔊 声音播报: <span style="color: #059669;">开启</span></span>
+              <span style="font-size: 12px; font-weight: 700; color: #1E293B;" id="sound-status-text">🔊 语音播报: <span style="color: #059669;">开启</span></span>
               <button type="button" id="btn-toggle-sound" class="btn btn-secondary btn-sm" style="height: 22px; font-size: 11px; padding: 0 6px; width: auto; font-weight: 600;">静音</button>
             </div>
-            <div style="font-size: 10px; color: #64748B; margin-bottom: 8px;">Web Audio 和弦 + 中文语音合成</div>
+            <div style="font-size: 10px; color: #64748B; margin-bottom: 8px;">
+              <span>含姓名/通道/账号/金额</span>
+            </div>
             <button type="button" id="btn-test-sound" class="btn btn-secondary btn-sm" style="width: 100%; height: 28px; font-size: 11px; background: #FFFFFF; border-color: #CBD5E1; color: var(--primary-color); display: flex; align-items: center; justify-content: center; gap: 4px; font-weight: 600;">
-              <span>🎵</span> 试听和弦与语音
+              <span>🎵</span> 试听完整语音播报
             </button>
           </div>
 
@@ -358,6 +383,12 @@
               <span>📨</span> 发送测试邮件
             </button>
           </div>
+        </div>
+
+        <!-- 辅助工具行：系统横幅通知权限 -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #E2E8F0; font-size: 11px;">
+          <span style="color: #64748B;">🔔 手机/电脑系统通知横幅: <span id="notif-perm-status" style="font-weight: 600; color: #0284C7;">检测中</span></span>
+          <button type="button" id="btn-req-notif" class="btn btn-secondary btn-sm" style="height: 24px; font-size: 10px; padding: 0 8px; width: auto;">授权通知</button>
         </div>
       </div>
 
@@ -517,31 +548,64 @@
     const ADMIN_TOKEN_KEY = 'cashout_admin_token';
     let currentUploadedImageDataUrl = '';
 
-    // mynotice 声音播报状态与新单差量检测引擎
+    // mynotice 声音播报状态、后台保活与新单差量检测引擎
     let isSoundEnabled = localStorage.getItem('mynotice_sound_enabled') !== 'false';
     const knownOrderNos = new Set();
     let isFirstOrderLoad = true;
-    let pollTimer = null;
+    let pollTimerObj = null;
 
     function updateSoundUI() {
       const statusText = document.getElementById('sound-status-text');
       const toggleBtn = document.getElementById('btn-toggle-sound');
       if (statusText && toggleBtn) {
         if (isSoundEnabled) {
-          statusText.innerHTML = '🔊 声音播报: <span style="color: #059669;">开启</span>';
+          statusText.innerHTML = '🔊 语音播报: <span style="color: #059669;">开启</span>';
           toggleBtn.innerText = '静音';
           toggleBtn.style.color = 'var(--text-muted)';
         } else {
-          statusText.innerHTML = '🔈 声音播报: <span style="color: #DC2626;">已静音</span>';
+          statusText.innerHTML = '🔈 语音播报: <span style="color: #DC2626;">已静音</span>';
           toggleBtn.innerText = '开启';
           toggleBtn.style.color = 'var(--primary-color)';
         }
       }
+      updateKeepaliveUI();
+      updateNotifPermUI();
+    }
+
+    function updateKeepaliveUI() {
+      const el = document.getElementById('keepalive-status-text');
+      if (!el) return;
+      const ready = window.MyNoticeSound && window.MyNoticeSound.isAudioReady();
+      if (ready) {
+        el.innerHTML = '后台保活运行模式: <span style="color: #059669;">🟢 已激活 (切到微信持续发声)</span>';
+      } else {
+        el.innerHTML = '后台保活运行模式: <span style="color: #D97706;">⚡ 轻触激活 (开启微信后台持续播报)</span>';
+      }
+    }
+
+    function updateNotifPermUI() {
+      const el = document.getElementById('notif-perm-status');
+      if (!el || typeof window === 'undefined' || !('Notification' in window)) return;
+      if (Notification.permission === 'granted') {
+        el.innerHTML = '<span style="color: #059669;">✅ 已授权 (支持锁屏横幅)</span>';
+      } else if (Notification.permission === 'denied') {
+        el.innerHTML = '<span style="color: #DC2626;">❌ 已被浏览器禁用</span>';
+      } else {
+        el.innerHTML = '<span style="color: #D97706;">⚪ 未授权 (点击右侧授权)</span>';
+      }
     }
 
     function startBackgroundPolling() {
-      if (pollTimer) clearInterval(pollTimer);
-      pollTimer = setInterval(async () => {
+      if (pollTimerObj) {
+        if (typeof pollTimerObj.stop === 'function') {
+          pollTimerObj.stop();
+        } else {
+          clearInterval(pollTimerObj);
+        }
+        pollTimerObj = null;
+      }
+
+      const pollTask = async () => {
         if (getAdminToken() && document.getElementById('view-dashboard').style.display !== 'none') {
           try {
             await loadOrders(true);
@@ -555,7 +619,14 @@
             console.warn('轮询刷新异常:', e);
           }
         }
-      }, 5000);
+      };
+
+      // 优先使用 Web Worker 独立线程，切到微信后仍准时轮询
+      if (window.MyNoticeSound && window.MyNoticeSound.createWorkerTimer) {
+        pollTimerObj = window.MyNoticeSound.createWorkerTimer(pollTask, 4500);
+      } else {
+        pollTimerObj = setInterval(pollTask, 4500);
+      }
     }
 
     function getAdminToken() {
@@ -606,9 +677,10 @@
     }
 
     function showLoginView() {
-      if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
+      if (pollTimerObj) {
+        if (typeof pollTimerObj.stop === 'function') pollTimerObj.stop();
+        else clearInterval(pollTimerObj);
+        pollTimerObj = null;
       }
       document.getElementById('view-login').style.display = 'flex';
       document.getElementById('view-dashboard').style.display = 'none';
@@ -627,18 +699,65 @@
       localStorage.setItem('mynotice_sound_enabled', isSoundEnabled ? 'true' : 'false');
       updateSoundUI();
       if (isSoundEnabled) {
-        if (window.MyNoticeSound) window.MyNoticeSound.unlockAudio();
+        if (window.MyNoticeSound) {
+          window.MyNoticeSound.unlockAudio();
+          window.MyNoticeSound.enableBackgroundKeepalive();
+        }
         Toast.success('🔊 已开启实时声音与中文语音播报');
       } else {
         Toast.info('🔈 已静音提示音与语音播报');
       }
     });
 
+    // 激活微信与后台保活运行模式
+    document.getElementById('btn-activate-keepalive').addEventListener('click', () => {
+      if (window.MyNoticeSound) {
+        window.MyNoticeSound.unlockAudio();
+        window.MyNoticeSound.enableBackgroundKeepalive();
+      }
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().then(() => updateNotifPermUI());
+      }
+      updateKeepaliveUI();
+      Toast.success('⚡ 微信后台运行保活已激活！切到微信聊天息屏仍可听到语音播报');
+    });
+
+    // 授权系统通知横幅
+    document.getElementById('btn-req-notif').addEventListener('click', () => {
+      if ('Notification' in window) {
+        Notification.requestPermission().then(permission => {
+          updateNotifPermUI();
+          if (permission === 'granted') {
+            Toast.success('✅ 已授权系统通知！有新单将在状态栏与锁屏弹出提醒');
+          } else {
+            Toast.warning('请在手机或浏览器设置中允许本站的通知权限');
+          }
+        });
+      } else {
+        Toast.info('当前浏览器不支持桌面系统通知');
+      }
+    });
+
+    // 试听完整语音播报测试
     document.getElementById('btn-test-sound').addEventListener('click', () => {
       if (window.MyNoticeSound) {
         window.MyNoticeSound.unlockAudio();
-        window.MyNoticeSound.alertNotification(1, '支付金额1000元，张伟申请提现');
-        Toast.info('已触发清脆和弦铃声与中文语音合成播报');
+        window.MyNoticeSound.enableBackgroundKeepalive();
+
+        const mockSampleOrder = {
+          amount: 500,
+          settle_amount: 496,
+          fee_rate: 0.8,
+          fee_amount: 4,
+          withdraw_name: '王建国',
+          merchant_name: '中国建设银行特约商户',
+          withdraw_method: 'alipay',
+          withdraw_account_plain: '13800138000'
+        };
+
+        window.MyNoticeSound.alertOrderNotification(mockSampleOrder, 1);
+        updateKeepaliveUI();
+        Toast.info('已触发完整语音播报（包含姓名、支付通道、提现方式、账号与金额）');
       } else {
         Toast.warning('声音模块加载中');
       }
@@ -850,13 +969,11 @@
               const userPerson = newest.withdraw_name || '客户';
 
               if (isSoundEnabled && window.MyNoticeSound) {
-                window.MyNoticeSound.alertNotification(
-                  newPendingList.length,
-                  `金额${payVal}元，${userPerson}申请提现`
-                );
+                // 触发包含【客户姓名、扫码通道、提现方式、打款账号与金额】的全字段高清语音播报与微信后台穿透发声
+                window.MyNoticeSound.alertOrderNotification(newest, newPendingList.length);
               }
 
-              Toast.warning(`🔔 收到 ${newPendingList.length} 笔新到账核实申请！金额 ¥${payVal} 元`);
+              Toast.warning(`🔔 收到 ${newPendingList.length} 笔新到账核实申请！金额 ¥${payVal} 元 (${userPerson})`);
             }
             orders.forEach(o => knownOrderNos.add(o.order_no));
           }
