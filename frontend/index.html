@@ -3,9 +3,186 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>扫码支付加款 - 客户提现服务</title>
+  <title>扫码支付提现 - 客户服务平台</title>
   <link rel="stylesheet" href="assets/style.css">
-  <script src="assets/jsqr.js"></script>
+  <style>
+    .channel-header-card {
+      background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%);
+      color: #FFFFFF;
+      border-radius: 16px;
+      padding: 16px 18px;
+      box-shadow: 0 4px 14px rgba(30, 27, 75, 0.2);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .channel-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .channel-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-switch-channel {
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #FFFFFF;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+    }
+    .btn-switch-channel:active {
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(0.96);
+    }
+    .channel-meta-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .channel-badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #E0E7FF;
+      font-weight: 500;
+    }
+    .channel-badge.fee {
+      background: rgba(245, 158, 11, 0.25);
+      color: #FDE68A;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+    .channel-badge.limit {
+      background: rgba(16, 185, 129, 0.25);
+      color: #A7F3D0;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+    /* 金额输入与实时计算区 */
+    .amount-input-card {
+      background: #FFFFFF;
+      border-radius: 14px;
+      border: 1px solid var(--border-color);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .amount-field-wrap {
+      display: flex;
+      align-items: center;
+      border-bottom: 2px solid #E2E8F0;
+      padding-bottom: 6px;
+      margin-top: 4px;
+      transition: border-color 0.2s ease;
+    }
+    .amount-field-wrap:focus-within {
+      border-color: var(--primary-color);
+    }
+    .amount-currency {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-right: 6px;
+    }
+    .amount-input-control {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--text-main);
+      background: transparent;
+      width: 100%;
+    }
+    .amount-presets {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 4px 0;
+    }
+    .preset-chip {
+      flex: 1;
+      text-align: center;
+      padding: 7px 4px;
+      border-radius: 8px;
+      background: #F1F5F9;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+      cursor: pointer;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .preset-chip.active {
+      background: var(--primary-light);
+      border-color: #C7D2FE;
+      color: var(--primary-color);
+    }
+    .calc-breakdown-box {
+      background: #F8FAFC;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border: 1px solid #EEF2F6;
+    }
+    .calc-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .calc-row.highlight {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+      border-top: 1px dashed var(--border-color);
+      padding-top: 6px;
+      margin-top: 2px;
+    }
+    /* 通道切换抽屉面板 */
+    .channel-drawer-sheet {
+      background: #FFFFFF;
+      border-radius: 20px 20px 0 0;
+      max-width: 480px;
+      width: 100%;
+      padding: 20px 18px 30px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .channel-item-card {
+      border: 1.5px solid var(--border-color);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.15s ease;
+    }
+    .channel-item-card.active {
+      border-color: var(--primary-color);
+      background-color: var(--primary-light);
+    }
+  </style>
 </head>
 <body>
   <div class="app-container">
@@ -15,67 +192,128 @@
         <div class="app-logo-badge">⚡</div>
         <h1 class="app-title">扫码支付提现</h1>
       </div>
+      <button class="btn-switch-channel" id="btn-top-switch" style="background: var(--primary-light); color: var(--primary-color); border: 1px solid #C7D2FE;">
+        🔄 切换其他二维码
+      </button>
     </header>
 
-    <!-- 主体内容：核心聚焦展示后台配置的二维码图片 -->
+    <!-- 主体内容 -->
     <main class="app-content">
-      <!-- 核心二维码展示主卡片 -->
-      <div class="clean-qr-card" id="main-qr-box">
-        <!-- 商家与商品说明 -->
-        <div class="clean-merchant-name" id="main-merchant-name">正在加载收款码...</div>
-        <div class="clean-product-sub" id="main-product-name">扫码完成支付后自动触发加款</div>
-
-        <!-- 显眼应付金额 -->
-        <div class="clean-amount-wrap">
-          <span class="clean-amount-symbol">¥</span>
-          <span class="clean-amount-val" id="main-amount">--</span>
-        </div>
-
-        <!-- 核心二维码高质图片展示区 -->
-        <div class="clean-qr-frame">
-          <img id="main-qr-img" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%23999'>加载中</text></svg>" alt="收款二维码" class="clean-qr-img">
-        </div>
-
-        <!-- 扫码说明标签 -->
-        <div class="clean-qr-badge">
-          <span>💬 支持微信 / 支付宝长按识别或扫码支付</span>
-        </div>
-
-        <!-- 提现到账账户提示 -->
-        <div class="clean-target-account">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span id="target-account-icon">💬</span>
-            <span>提现到账: <strong id="target-account-name" style="color: var(--primary-color);">微信零钱</strong></span>
+      <!-- 当前通道信息卡片 -->
+      <div class="channel-header-card" id="channel-card">
+        <div class="channel-top-row">
+          <div class="channel-title">
+            <span id="channel-icon">🏦</span>
+            <span id="channel-name">正在加载收款通道...</span>
           </div>
-          <a href="settings.html" style="color: var(--primary-color); text-decoration: underline;">修改 ></a>
+          <button class="btn-switch-channel" id="btn-card-switch">
+            切换码 ▾
+          </button>
+        </div>
+        <div class="channel-meta-badges">
+          <span class="channel-badge fee" id="badge-fee-rate">手续费 0.8%</span>
+          <span class="channel-badge limit" id="badge-limit">单笔 10~10000元</span>
+          <span class="channel-badge" id="badge-feature">聚合收款</span>
+        </div>
+        <div style="font-size: 11px; color: #C7D2FE; margin-top: 2px;" id="channel-desc-text">
+          若微信提示无法支付或受限，请点击右上角切换其他收款码
+        </div>
+      </div>
+
+      <!-- 核心二维码展示主卡片 -->
+      <div class="clean-qr-card" id="main-qr-box" style="margin-bottom: 0;">
+        <!-- 核心二维码高质图片展示区 (专为手机长按识别优化) -->
+        <div class="clean-qr-frame" id="qr-frame-box">
+          <img id="main-qr-img" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%23999'>加载中</text></svg>" alt="商户收款二维码" class="clean-qr-img">
         </div>
 
-        <!-- 主操作按钮：我已支付，立即提现 -->
-        <button type="button" class="btn btn-primary" id="btn-pay-cashout" style="margin-top: 18px;">
+        <!-- 长按识别操作指引标签 -->
+        <div class="clean-qr-badge" style="margin-top: 14px; background: #EEF2FF; border-color: #C7D2FE; color: var(--primary-color); font-weight: 600;">
+          <span>👆 长按上方二维码识别，进入微信/银行支付</span>
+        </div>
+
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">
+          长按识别后，在微信中输入您想要支付的金额并完成付款
+        </div>
+
+        <!-- 切换其他二维码快捷触发行 -->
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-color); font-size: 12px;">
+          <span style="color: var(--text-muted);">当前通道受限或无法识别？</span>
+          <button type="button" id="btn-inline-switch" style="background: none; border: none; color: var(--primary-color); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+            <span>🔄 切换其他二维码</span>
+            <span>›</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 金额输入与实时费率/到账计算卡片 -->
+      <div class="amount-input-card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <label style="font-size: 13px; font-weight: 700; color: var(--text-main);">
+            输入您扫码支付的金额
+          </label>
+          <span id="limit-hint-text" style="font-size: 11px; color: var(--text-muted);">
+            单笔限额 10 ~ 10000 元
+          </span>
+        </div>
+
+        <div class="amount-field-wrap">
+          <span class="amount-currency">¥</span>
+          <input type="number" id="input-paid-amount" class="amount-input-control" placeholder="0.00" step="0.01" min="1" value="1000">
+        </div>
+
+        <!-- 常用快捷金额 -->
+        <div class="amount-presets" id="amount-presets-row">
+          <div class="preset-chip" data-val="50">¥50</div>
+          <div class="preset-chip" data-val="100">¥100</div>
+          <div class="preset-chip" data-val="500">¥500</div>
+          <div class="preset-chip active" data-val="1000">¥1000</div>
+          <div class="preset-chip" data-val="2000">¥2000</div>
+          <div class="preset-chip" data-val="5000">¥5000</div>
+        </div>
+
+        <!-- 实时手续费扣减与实际到账明细计算 -->
+        <div class="calc-breakdown-box">
+          <div class="calc-row">
+            <span>支付本金</span>
+            <span id="calc-principal">¥1000.00</span>
+          </div>
+          <div class="calc-row">
+            <span>通道手续费 (<span id="calc-rate-label">0.8%</span>)</span>
+            <span style="color: var(--danger-color); font-weight: 500;" id="calc-fee">-¥8.00</span>
+          </div>
+          <div class="calc-row highlight">
+            <span>预计实际提现到账</span>
+            <span style="color: var(--success-color); font-size: 17px;" id="calc-settle">¥992.00</span>
+          </div>
+        </div>
+
+        <!-- 提现到账账户提示条 (自动记忆上一次选择的结果) -->
+        <div class="clean-target-account" style="margin-top: 2px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="target-account-icon" style="font-size: 18px;">💬</span>
+            <div>
+              <div style="font-size: 11px; color: var(--text-muted);">提现到账接收账户（默认记住上一次）</div>
+              <div style="font-weight: 700; color: var(--primary-color);" id="target-account-name">微信收款 (138****8000)</div>
+            </div>
+          </div>
+          <button type="button" id="btn-quick-edit-account" style="background: none; border: none; color: var(--primary-color); font-size: 12px; font-weight: 600; cursor: pointer;">
+            更换/修改 ›
+          </button>
+        </div>
+
+        <!-- 主操作按钮：我已扫码支付，立即提现到账 -->
+        <button type="button" class="btn btn-primary" id="btn-pay-cashout" style="margin-top: 6px; font-size: 16px; height: 50px;">
           我已扫码支付，立即提现到账
         </button>
-
-        <div style="display: flex; justify-content: space-between; width: 100%; margin-top: 14px; font-size: 12px; color: var(--text-muted);">
-          <span>⏱️ 加款秒级自动到账</span>
-          <a href="scan.html" style="color: var(--primary-color); text-decoration: none;">📷 扫描其他码 ></a>
-        </div>
       </div>
 
-      <!-- 多码快捷切换 (后台配置了多个码时自动显示) -->
-      <div class="ui-card" id="multi-qr-card" style="display: none;">
-        <div class="ui-card-title">
-          <span>切换其他商户收款码</span>
-          <span style="font-size: 11px; color: var(--text-muted);" id="multi-qr-count">共 0 个码</span>
-        </div>
-        <div class="clean-switch-pill" id="qr-switcher-container"></div>
-      </div>
-
-      <!-- 安全保障简要说明 -->
-      <div class="security-box" style="margin-top: 4px;">
-        <span style="font-size: 18px;">🛡️</span>
+      <!-- 安全与说明 -->
+      <div class="security-box">
+        <span style="font-size: 20px;">🛡️</span>
         <div>
-          <strong style="color: var(--text-main);">资金与隐私安全保障</strong>
-          <div>收款账户信息已通过 AES-256 标准加密保护，仅用于本次扫码提现原路打款。</div>
+          <strong style="color: var(--text-main);">人工到账核对与打款保障</strong>
+          <div>提交提现申请后，后台管理员将在1~3分钟内核查商户真实入账流水，确认到账后将立即按您选定的方式全额打款充值。</div>
         </div>
       </div>
     </main>
@@ -84,7 +322,7 @@
     <nav class="app-nav">
       <a href="index.html" class="nav-item active">
         <div class="nav-icon">💳</div>
-        <span>收款码</span>
+        <span>扫码提现</span>
       </a>
       <a href="status.html" class="nav-item">
         <div class="nav-icon">📊</div>
@@ -97,48 +335,122 @@
     </nav>
   </div>
 
-  <!-- 确认支付与提现弹窗 -->
+  <!-- 弹窗 1：多收款码选择切换抽屉 (切换其他二维码) -->
+  <div id="channel-picker-modal" class="modal-mask" style="display: none;">
+    <div class="channel-drawer-sheet">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <div>
+          <h3 style="font-size: 16px; font-weight: 700; color: var(--text-main);">切换其他二维码</h3>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">选择适合您支付限额或未受限的商户收款通道</p>
+        </div>
+        <button class="close-btn" id="btn-close-channel-picker">&times;</button>
+      </div>
+
+      <div id="channel-list-container" style="display: flex; flex-direction: column; gap: 8px;">
+        <!-- 动态生成通道列表 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 弹窗 2：确认支付与选择提现到账方式抽屉 (发起人工核实) -->
   <div id="confirm-pay-modal" class="modal-mask" style="display: none;">
-    <div class="modal-sheet">
+    <div class="modal-sheet" style="max-height: 85vh; overflow-y: auto;">
       <div class="modal-header">
-        <h3 class="modal-title">确认支付与提现</h3>
+        <h3 class="modal-title">确认扫码支付与到账方式</h3>
         <button class="close-btn" id="modal-close-btn">&times;</button>
       </div>
 
+      <!-- 金额明细 -->
       <div class="pay-amount-display">
-        <div class="pay-amount-label">应提现加款金额</div>
+        <div class="pay-amount-label">预计实际提现到账</div>
         <div class="pay-amount-value">
-          <span class="pay-amount-symbol">¥</span><span id="confirm-amount">0.00</span>
+          <span class="pay-amount-symbol">¥</span><span id="confirm-settle-amount">0.00</span>
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+          扫码本金: ¥<span id="confirm-pay-amount">0.00</span> · 手续费: -¥<span id="confirm-fee-amount">0.00</span>
         </div>
       </div>
 
-      <div class="info-rows">
+      <div class="info-rows" style="margin-bottom: 12px;">
         <div class="info-row">
-          <span class="info-row-label">收款商户</span>
-          <span class="info-row-val" id="confirm-merchant">--</span>
+          <span class="info-row-label">扫码收款通道</span>
+          <span class="info-row-val" id="confirm-merchant-val" style="font-weight: 600;">--</span>
         </div>
         <div class="info-row">
-          <span class="info-row-label">商品项目</span>
-          <span class="info-row-val" id="confirm-product">--</span>
-        </div>
-        <div class="info-row">
-          <span class="info-row-label">加款入账账户</span>
-          <span class="info-row-val" id="confirm-account-text" style="color: var(--primary-color);">微信零钱</span>
+          <span class="info-row-label">通道费率与限额</span>
+          <span class="info-row-val" id="confirm-rate-val">0.8% (单笔10~10000元)</span>
         </div>
       </div>
 
-      <div>
-        <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);">选择提现到账方式：</label>
+      <!-- 选择提现到账方式（默认记住上一次选择） -->
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; font-weight: 700; color: var(--text-main); display: block; margin-bottom: 8px;">
+          选择提现到账方式 (默认已记住上次配置)：
+        </label>
         <div class="method-chips" id="confirm-method-chips">
-          <div class="method-chip active" data-method="wechat">💬 微信</div>
+          <div class="method-chip active" data-method="wechat">💬 微信零钱</div>
           <div class="method-chip" data-method="alipay">🔵 支付宝</div>
-          <div class="method-chip" data-method="bank">🏦 银行卡</div>
+          <div class="method-chip" data-method="bank">🏦 银行卡转账</div>
         </div>
       </div>
 
-      <button class="btn btn-primary" id="btn-submit-order" style="margin-top: 14px;">
-        确认已扫码支付，立即自动提现
+      <!-- 动态收款账号填写/核对区域 (每个用户独立) -->
+      <div style="background: #F8FAFC; border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; margin-bottom: 14px;">
+        <!-- 微信账号表单 -->
+        <div id="subform-wechat" class="method-subform">
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label class="form-label" style="font-size: 12px;">微信收款账号 / 绑定手机号 <span style="color: var(--danger-color);">*</span></label>
+            <input type="text" class="form-input" id="input-confirm-wx-account" placeholder="请输入您的微信号或手机号" style="height: 38px; font-size: 13px;">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size: 12px;">收款人实名姓名 (用于微信转账核名)</label>
+            <input type="text" class="form-input" id="input-confirm-wx-name" placeholder="收款人姓名 (如: 张三)" style="height: 38px; font-size: 13px;">
+          </div>
+        </div>
+
+        <!-- 支付宝账号表单 -->
+        <div id="subform-alipay" class="method-subform" style="display: none;">
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label class="form-label" style="font-size: 12px;">支付宝账号 (手机号或邮箱) <span style="color: var(--danger-color);">*</span></label>
+            <input type="text" class="form-input" id="input-confirm-ali-account" placeholder="请输入支付宝手机号或邮箱" style="height: 38px; font-size: 13px;">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size: 12px;">支付宝实名姓名 <span style="color: var(--danger-color);">*</span></label>
+            <input type="text" class="form-input" id="input-confirm-ali-name" placeholder="支付宝实名真实姓名" style="height: 38px; font-size: 13px;">
+          </div>
+        </div>
+
+        <!-- 银行卡表单 -->
+        <div id="subform-bank" class="method-subform" style="display: none;">
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label class="form-label" style="font-size: 12px;">银行储蓄卡卡号 <span style="color: var(--danger-color);">*</span></label>
+            <input type="text" class="form-input" id="input-confirm-bank-account" placeholder="请输入银行卡号" style="height: 38px; font-size: 13px;">
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label" style="font-size: 12px;">开户银行名称 <span style="color: var(--danger-color);">*</span></label>
+              <input type="text" class="form-input" id="input-confirm-bank-name" placeholder="如: 工商银行" style="height: 38px; font-size: 13px;">
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label" style="font-size: 12px;">持卡人姓名 <span style="color: var(--danger-color);">*</span></label>
+              <input type="text" class="form-input" id="input-confirm-bank-realname" placeholder="开户实名" style="height: 38px; font-size: 13px;">
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px; font-size: 12px; color: var(--text-muted);">
+          <span>自动记住此提现方式，下次无需重填</span>
+          <input type="checkbox" id="chk-remember-config" checked style="accent-color: var(--primary-color); width: 16px; height: 16px;">
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="btn-submit-order" style="height: 48px; font-size: 15px;">
+        确认已扫码支付，提交人工到账核实
       </button>
+
+      <div style="text-align: center; margin-top: 10px; font-size: 11px; color: var(--text-muted);">
+        💡 提交后系统立即向后台发出【到账核实请求】，管理员核实微信/银行流水后立即打款
+      </div>
     </div>
   </div>
 
@@ -147,94 +459,195 @@
     let activeQrData = null;
     let allQrcodes = [];
     let selectedMethod = 'wechat';
-    let userConfigs = [];
+    let currentPrefs = null;
 
-    // 1. 加载后台配置的当前主推二维码
-    async function loadActiveQRCode() {
-      try {
-        const res = await API.get('/merchant/active');
-        if (res) {
-          renderQRCode(res);
-        } else {
-          document.getElementById('main-merchant-name').innerText = '暂无已配置的收款码';
-          document.getElementById('main-product-name').innerText = '请登录后台上传二维码图片';
-        }
-      } catch (err) {
-        console.warn('获取当前收款码失败:', err);
-        document.getElementById('main-merchant-name').innerText = '无法加载收款码';
-      }
-    }
-
-    // 2. 加载所有可用二维码（供切换选择）
-    async function loadAllQRCodes() {
+    // 1. 加载所有可用收款码
+    async function loadQRCodes() {
       try {
         const list = await API.get('/merchant/qrcodes');
         allQrcodes = list || [];
-        if (allQrcodes.length > 1) {
-          const container = document.getElementById('qr-switcher-container');
-          document.getElementById('multi-qr-card').style.display = 'block';
-          document.getElementById('multi-qr-count').innerText = `共 ${allQrcodes.length} 个收款码`;
-          container.innerHTML = allQrcodes.map(item => `
-            <button class="btn btn-secondary btn-sm ${activeQrData && activeQrData.id === item.id ? 'active' : ''}" 
-                    style="height: 30px; font-size: 12px; padding: 0 10px;"
-                    onclick="switchQRCode(${item.id})">
-              ${item.merchant_name} (¥${item.amount.toFixed(2)})
-            </button>
-          `).join('');
+
+        if (allQrcodes.length > 0) {
+          // 查找激活的码，或者默认首个
+          const active = allQrcodes.find(q => q.is_active) || allQrcodes[0];
+          applyQRCode(active);
+          renderChannelPickerList();
+        } else {
+          document.getElementById('channel-name').innerText = '后台暂未配置收款码';
         }
       } catch (e) {
-        console.warn('加载商户列表失败:', e);
+        console.warn('获取收款码列表失败:', e);
       }
     }
 
-    // 渲染二维码信息到界面
-    function renderQRCode(data) {
-      activeQrData = data;
-      document.getElementById('main-merchant-name').innerText = data.merchant_name;
-      document.getElementById('main-product-name').innerText = data.product_name || '扫码完成支付后自动触发加款';
-      document.getElementById('main-amount').innerText = Number(data.amount).toFixed(2);
-      if (data.qr_image_url) {
-        document.getElementById('main-qr-img').src = data.qr_image_url;
+    // 应用选中的收款码
+    function applyQRCode(item) {
+      activeQrData = item;
+      document.getElementById('channel-name').innerText = item.merchant_name;
+      document.getElementById('badge-fee-rate').innerText = `手续费 ${item.fee_rate}%`;
+      document.getElementById('badge-limit').innerText = `单笔 ${item.min_limit || 1}~${item.max_limit || 10000}元`;
+      document.getElementById('limit-hint-text').innerText = `单笔限额 ${item.min_limit || 1} ~ ${item.max_limit || 10000} 元`;
+      document.getElementById('badge-feature').innerText = item.channel_desc ? item.channel_desc.slice(0, 12) : '特约商户';
+      document.getElementById('channel-desc-text').innerText = item.channel_desc || '若微信提示无法支付或受限，请点击右上角切换其他收款码';
+
+      // 渠道图标匹配
+      if (item.merchant_name.includes('建行') || item.merchant_name.includes('建设')) {
+        document.getElementById('channel-icon').innerText = '🏦';
+      } else if (item.merchant_name.includes('农金') || item.merchant_name.includes('农村信用')) {
+        document.getElementById('channel-icon').innerText = '🌾';
+      } else if (item.merchant_name.includes('工行') || item.merchant_name.includes('工商')) {
+        document.getElementById('channel-icon').innerText = '💳';
+      } else {
+        document.getElementById('channel-icon').innerText = '🏪';
       }
+
+      if (item.qr_image_url) {
+        document.getElementById('main-qr-img').src = item.qr_image_url;
+      }
+
+      calculateAmounts();
+      renderChannelPickerList();
     }
 
-    // 切换选中的二维码
-    window.switchQRCode = function(id) {
+    // 渲染切换收款码抽屉列表
+    function renderChannelPickerList() {
+      const container = document.getElementById('channel-list-container');
+      if (!container) return;
+
+      container.innerHTML = allQrcodes.map(item => {
+        const isCur = activeQrData && activeQrData.id === item.id;
+        return `
+          <div class="channel-item-card ${isCur ? 'active' : ''}" onclick="selectChannelItem(${item.id})">
+            <div>
+              <div style="font-weight: 700; font-size: 14px; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                <span>${item.merchant_name}</span>
+                ${isCur ? '<span class="header-tag" style="font-size: 10px; padding: 1px 6px;">当前展示</span>' : ''}
+              </div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">
+                ${item.channel_desc || '商户聚合直连通道'}
+              </div>
+              <div style="display: flex; gap: 6px; margin-top: 4px;">
+                <span class="channel-badge fee" style="color: #B45309; background: #FEF3C7; border: none; font-size: 10px;">费率: ${item.fee_rate}%</span>
+                <span class="channel-badge limit" style="color: #047857; background: #D1FAE5; border: none; font-size: 10px;">限额: ${item.min_limit || 1}~${item.max_limit || 10000}元</span>
+              </div>
+            </div>
+            <button class="btn btn-sm ${isCur ? 'btn-primary' : 'btn-secondary'}" style="width: auto; height: 32px; padding: 0 14px; font-size: 12px;">
+              ${isCur ? '使用中' : '切换'}
+            </button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 选中通道
+    window.selectChannelItem = function(id) {
       const target = allQrcodes.find(q => q.id === id);
       if (target) {
-        renderQRCode(target);
-        loadAllQRCodes();
+        applyQRCode(target);
+        document.getElementById('channel-picker-modal').style.display = 'none';
+        Toast.success(`已切换至: ${target.merchant_name}`);
       }
     };
 
-    // 3. 加载用户默认到账账户
-    async function loadUserConfigs() {
-      try {
-        const userId = StateService.getUserId();
-        const data = await API.get(`/user/config/${userId}`);
-        userConfigs = data.configs || [];
-        if (data.default_config) {
-          selectedMethod = data.default_config.method;
+    // 快捷切换到下一个收款码（如果当前码不可用）
+    function switchToNextQRCode() {
+      if (allQrcodes.length <= 1) {
+        Toast.info('当前后台仅有1个收款码，可点击右上角或后台上传更多');
+        return;
+      }
+      const curIndex = allQrcodes.findIndex(q => q.id === (activeQrData && activeQrData.id));
+      const nextIndex = (curIndex + 1) % allQrcodes.length;
+      applyQRCode(allQrcodes[nextIndex]);
+      Toast.success(`已切换至: ${allQrcodes[nextIndex].merchant_name}`);
+    }
+
+    // 计算手续费与实际到账金额
+    function calculateAmounts() {
+      const inputElem = document.getElementById('input-paid-amount');
+      const val = parseFloat(inputElem.value) || 0;
+      const rate = (activeQrData && parseFloat(activeQrData.fee_rate)) || 0.8;
+
+      const fee = parseFloat(((val * rate) / 100).toFixed(2));
+      const settle = parseFloat((val - fee).toFixed(2));
+
+      document.getElementById('calc-principal').innerText = `¥${val.toFixed(2)}`;
+      document.getElementById('calc-rate-label').innerText = `${rate}%`;
+      document.getElementById('calc-fee').innerText = `-¥${fee.toFixed(2)}`;
+      document.getElementById('calc-settle').innerText = `¥${Math.max(0, settle).toFixed(2)}`;
+
+      // 检查限额
+      if (activeQrData) {
+        const max = parseFloat(activeQrData.max_limit || 10000);
+        const min = parseFloat(activeQrData.min_limit || 1);
+        const limitHint = document.getElementById('limit-hint-text');
+        if (val > max) {
+          limitHint.innerHTML = `<span style="color: var(--danger-color); font-weight: bold;">⚠️ 超出当前单笔最高限额 (¥${max.toFixed(2)})，建议切换收款码</span>`;
+        } else if (val < min && val > 0) {
+          limitHint.innerHTML = `<span style="color: var(--danger-color); font-weight: bold;">⚠️ 低于当前单笔最低限额 (¥${min.toFixed(2)})</span>`;
+        } else {
+          limitHint.innerText = `单笔限额 ${min} ~ ${max} 元`;
         }
-        updateAccountBadgeDisplay();
-      } catch (e) {
-        console.warn('加载收款配置异常:', e);
       }
     }
 
-    function updateAccountBadgeDisplay() {
-      const methodMap = { wechat: '微信零钱', alipay: '支付宝', bank: '银行卡' };
-      const iconMap = { wechat: '💬', alipay: '🔵', bank: '🏦' };
-      const matched = userConfigs.find(c => c.method === selectedMethod);
+    // 金额输入监听
+    document.getElementById('input-paid-amount').addEventListener('input', calculateAmounts);
 
-      document.getElementById('target-account-icon').innerText = iconMap[selectedMethod] || '💳';
-      const text = matched ? `${methodMap[selectedMethod]} (${matched.account_masked})` : `${methodMap[selectedMethod]}`;
-      document.getElementById('target-account-name').innerText = text;
+    // 金额快捷选项切换
+    document.querySelectorAll('.preset-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('.preset-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        document.getElementById('input-paid-amount').value = chip.dataset.val;
+        calculateAmounts();
+      });
+    });
 
-      // 弹窗中同步
-      if (document.getElementById('confirm-account-text')) {
-        document.getElementById('confirm-account-text').innerText = text;
+    // 绑定切换其他二维码按钮事件
+    document.getElementById('btn-top-switch').addEventListener('click', () => {
+      document.getElementById('channel-picker-modal').style.display = 'flex';
+    });
+    document.getElementById('btn-card-switch').addEventListener('click', () => {
+      document.getElementById('channel-picker-modal').style.display = 'flex';
+    });
+    document.getElementById('btn-inline-switch').addEventListener('click', () => {
+      // 若只有2个直接快速轮换，若多个则打开抽屉
+      if (allQrcodes.length === 2) {
+        switchToNextQRCode();
+      } else {
+        document.getElementById('channel-picker-modal').style.display = 'flex';
       }
+    });
+    document.getElementById('btn-close-channel-picker').addEventListener('click', () => {
+      document.getElementById('channel-picker-modal').style.display = 'none';
+    });
+
+    // 2. 加载与记忆用户的提现配置
+    function loadUserPreferences() {
+      currentPrefs = UserPreferenceService.getPreferences();
+      selectedMethod = currentPrefs.method || 'wechat';
+
+      // 回填表单
+      if (currentPrefs.wechat) {
+        document.getElementById('input-confirm-wx-account').value = currentPrefs.wechat.account || '';
+        document.getElementById('input-confirm-wx-name').value = currentPrefs.wechat.real_name || '';
+      }
+      if (currentPrefs.alipay) {
+        document.getElementById('input-confirm-ali-account').value = currentPrefs.alipay.account || '';
+        document.getElementById('input-confirm-ali-name').value = currentPrefs.alipay.real_name || '';
+      }
+      if (currentPrefs.bank) {
+        document.getElementById('input-confirm-bank-account').value = currentPrefs.bank.account || '';
+        document.getElementById('input-confirm-bank-name').value = currentPrefs.bank.bank_name || '';
+        document.getElementById('input-confirm-bank-realname').value = currentPrefs.bank.real_name || '';
+      }
+
+      updateSelectedMethodDisplay();
+    }
+
+    // 更新提现到账方式显示
+    function updateSelectedMethodDisplay() {
+      // 切换 chips 激活态
       document.querySelectorAll('#confirm-method-chips .method-chip').forEach(chip => {
         if (chip.dataset.method === selectedMethod) {
           chip.classList.add('active');
@@ -242,64 +655,170 @@
           chip.classList.remove('active');
         }
       });
+
+      // 切换子表单
+      document.getElementById('subform-wechat').style.display = selectedMethod === 'wechat' ? 'block' : 'none';
+      document.getElementById('subform-alipay').style.display = selectedMethod === 'alipay' ? 'block' : 'none';
+      document.getElementById('subform-bank').style.display = selectedMethod === 'bank' ? 'block' : 'none';
+
+      // 刷新首页卡片上的快捷到账标签
+      const iconMap = { wechat: '💬', alipay: '🔵', bank: '🏦' };
+      const nameMap = { wechat: '微信收款', alipay: '支付宝', bank: '银行卡转账' };
+      document.getElementById('target-account-icon').innerText = iconMap[selectedMethod];
+
+      let acctText = '';
+      if (selectedMethod === 'wechat') {
+        const val = document.getElementById('input-confirm-wx-account').value || '未设置';
+        acctText = `微信收款 (${val})`;
+      } else if (selectedMethod === 'alipay') {
+        const val = document.getElementById('input-confirm-ali-account').value || '未设置';
+        acctText = `支付宝 (${val})`;
+      } else if (selectedMethod === 'bank') {
+        const bName = document.getElementById('input-confirm-bank-name').value || '储蓄卡';
+        const val = document.getElementById('input-confirm-bank-account').value || '未设置';
+        acctText = `${bName} (${val})`;
+      }
+      document.getElementById('target-account-name').innerText = acctText;
     }
 
-    // 提现方式切换事件
+    // 提现方式切换监听
     document.querySelectorAll('#confirm-method-chips .method-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         selectedMethod = chip.dataset.method;
-        updateAccountBadgeDisplay();
+        updateSelectedMethodDisplay();
       });
     });
 
-    // 4. 点击“我已扫码支付，立即提现到账”打开确认弹窗
+    // 点击“更换/修改账户”直接打开弹窗
+    document.getElementById('btn-quick-edit-account').addEventListener('click', () => {
+      openConfirmModal();
+    });
+
+    // 3. 点击“我已扫码支付，立即提现到账”打开确认弹窗
     document.getElementById('btn-pay-cashout').addEventListener('click', () => {
+      openConfirmModal();
+    });
+
+    function openConfirmModal() {
       if (!activeQrData) {
         Toast.warning('收款码尚未加载，请稍候');
         return;
       }
 
-      document.getElementById('confirm-amount').innerText = Number(activeQrData.amount).toFixed(2);
-      document.getElementById('confirm-merchant').innerText = activeQrData.merchant_name;
-      document.getElementById('confirm-product').innerText = activeQrData.product_name || '扫码支付加款';
-      updateAccountBadgeDisplay();
+      const inputVal = parseFloat(document.getElementById('input-paid-amount').value) || 0;
+      if (inputVal <= 0) {
+        Toast.error('请输入有效的支付金额');
+        return;
+      }
 
+      // 校验限额
+      const max = parseFloat(activeQrData.max_limit || 10000);
+      const min = parseFloat(activeQrData.min_limit || 1);
+      if (inputVal > max) {
+        Toast.warning(`输入金额超过当前通道限额 (¥${max.toFixed(2)})，建议切换其他二维码`);
+      }
+
+      const rate = parseFloat(activeQrData.fee_rate || 0.8);
+      const fee = parseFloat(((inputVal * rate) / 100).toFixed(2));
+      const settle = parseFloat((inputVal - fee).toFixed(2));
+
+      document.getElementById('confirm-pay-amount').innerText = inputVal.toFixed(2);
+      document.getElementById('confirm-fee-amount').innerText = fee.toFixed(2);
+      document.getElementById('confirm-settle-amount').innerText = Math.max(0, settle).toFixed(2);
+      document.getElementById('confirm-merchant-val').innerText = activeQrData.merchant_name;
+      document.getElementById('confirm-rate-val').innerText = `${rate}% (限额 ${min}~${max}元)`;
+
+      updateSelectedMethodDisplay();
       document.getElementById('confirm-pay-modal').style.display = 'flex';
-    });
+    }
 
     document.getElementById('modal-close-btn').addEventListener('click', () => {
       document.getElementById('confirm-pay-modal').style.display = 'none';
     });
 
-    // 5. 确认提交订单并触发提现
+    // 4. 提交订单并向后台发起【到账核实请求】
     document.getElementById('btn-submit-order').addEventListener('click', async () => {
       if (!activeQrData) return;
 
-      Loading.show('正在提交支付确认与提现申请...');
+      const inputVal = parseFloat(document.getElementById('input-paid-amount').value) || 0;
+      if (inputVal <= 0) {
+        Toast.error('请输入有效的支付金额');
+        return;
+      }
+
+      let withdrawAccount = '';
+      let withdrawName = '';
+      let withdrawBank = '';
+
+      if (selectedMethod === 'wechat') {
+        withdrawAccount = document.getElementById('input-confirm-wx-account').value.trim();
+        withdrawName = document.getElementById('input-confirm-wx-name').value.trim();
+        if (!withdrawAccount) {
+          Toast.error('请填写您的微信号或微信绑定的手机号');
+          return;
+        }
+      } else if (selectedMethod === 'alipay') {
+        withdrawAccount = document.getElementById('input-confirm-ali-account').value.trim();
+        withdrawName = document.getElementById('input-confirm-ali-name').value.trim();
+        if (!withdrawAccount) {
+          Toast.error('请填写您的支付宝账号');
+          return;
+        }
+        if (!withdrawName) {
+          Toast.error('请填写支付宝实名姓名');
+          return;
+        }
+      } else if (selectedMethod === 'bank') {
+        withdrawAccount = document.getElementById('input-confirm-bank-account').value.trim();
+        withdrawBank = document.getElementById('input-confirm-bank-name').value.trim();
+        withdrawName = document.getElementById('input-confirm-bank-realname').value.trim();
+        if (!withdrawAccount) {
+          Toast.error('请填写您的银行卡号');
+          return;
+        }
+        if (!withdrawBank) {
+          Toast.error('请填写开户银行名称');
+          return;
+        }
+        if (!withdrawName) {
+          Toast.error('请填写持卡人姓名');
+          return;
+        }
+      }
+
+      // 记忆到用户偏好中
+      if (document.getElementById('chk-remember-config').checked) {
+        UserPreferenceService.saveMethod(selectedMethod);
+        if (selectedMethod === 'wechat') {
+          UserPreferenceService.saveAccountDetails('wechat', { account: withdrawAccount, real_name: withdrawName });
+        } else if (selectedMethod === 'alipay') {
+          UserPreferenceService.saveAccountDetails('alipay', { account: withdrawAccount, real_name: withdrawName });
+        } else if (selectedMethod === 'bank') {
+          UserPreferenceService.saveAccountDetails('bank', { account: withdrawAccount, bank_name: withdrawBank, real_name: withdrawName });
+        }
+      }
+
+      Loading.show('正在向后台发送【到账核实请求】...');
       try {
-        const matched = userConfigs.find(c => c.method === selectedMethod);
         const orderPayload = {
           user_id: StateService.getUserId(),
           qrcode_id: activeQrData.id,
-          amount: activeQrData.amount,
+          amount: inputVal,
           withdraw_method: selectedMethod,
-          withdraw_account: matched ? matched.account : undefined,
-          real_name: matched ? matched.real_name : undefined,
-          bank_name: matched ? matched.bank_name : undefined
+          withdraw_account: withdrawAccount,
+          real_name: withdrawName,
+          bank_name: withdrawBank
         };
 
         const result = await API.post('/order/create', orderPayload);
         Loading.hide();
-        Toast.success('提交成功！正在处理自动加款');
+        Toast.success('到账核实请求已提交！后台管理员将人工核实并打款');
 
         StateService.setLastOrderNo(result.order_no);
 
-        // 自动调度模拟出款流
-        API.post(`/order/simulate-flow/${result.order_no}`).catch(() => {});
-
         setTimeout(() => {
           window.location.href = `status.html?orderNo=${result.order_no}`;
-        }, 600);
+        }, 800);
 
       } catch (err) {
         Loading.hide();
@@ -308,9 +827,8 @@
     });
 
     document.addEventListener('DOMContentLoaded', async () => {
-      await loadActiveQRCode();
-      await loadAllQRCodes();
-      await loadUserConfigs();
+      loadUserPreferences();
+      await loadQRCodes();
     });
   </script>
 </body>

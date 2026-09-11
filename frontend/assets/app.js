@@ -153,121 +153,32 @@ const StateService = {
   }
 };
 
-// 扫码器服务（结合摄像头流与本地图片上传解析）
-const QRScannerService = {
-  stream: null,
-  scanTimer: null,
-  canvas: null,
-  ctx: null,
-
-  async startCamera(videoElement, onDetected, onError) {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      if (onError) onError(new Error('当前浏览器或环境不支持调用摄像头'));
-      return;
-    }
-
+// 用户收款偏好缓存（记住上一次选择的结果，保证每个用户独立）
+const UserPreferenceService = {
+  getPreferences() {
     try {
-      this.canvas = document.createElement('canvas');
-      this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
-
-      // 优先请求后置摄像头 (environment)
-      const constraints = {
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      };
-
-      this.stream = await navigator.mediaDevices.getUserMedia(constraints);
-      videoElement.srcObject = this.stream;
-      await videoElement.play();
-
-      // 开始逐帧扫描
-      const scanFrame = () => {
-        if (!this.stream || videoElement.readyState !== videoElement.HAVE_ENOUGH_DATA) {
-          this.scanTimer = requestAnimationFrame(scanFrame);
-          return;
-        }
-
-        this.canvas.width = videoElement.videoWidth;
-        this.canvas.height = videoElement.videoHeight;
-        this.ctx.drawImage(videoElement, 0, 0, this.canvas.width, this.canvas.height);
-
-        const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
-        
-        // 检查全局 jsQR 是否可用
-        if (typeof jsQR === 'function') {
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'dontInvert'
-          });
-
-          if (code && code.data) {
-            // 扫描成功，触发震动反馈（如果设备支持）
-            if (navigator.vibrate) navigator.vibrate(100);
-            this.stopCamera();
-            onDetected(code.data);
-            return;
-          }
-        }
-
-        this.scanTimer = requestAnimationFrame(scanFrame);
-      };
-
-      this.scanTimer = requestAnimationFrame(scanFrame);
-
-    } catch (err) {
-      console.warn('[Camera] 无法开启摄像头:', err.message);
-      if (onError) onError(err);
-    }
+      const raw = localStorage.getItem('qr_user_preferred_withdraw');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return {
+      method: 'wechat',
+      wechat: { account: '13800138000', real_name: '张三' },
+      alipay: { account: '13800138000', real_name: '张三' },
+      bank: { account: '6222021001123456789', bank_name: '中国工商银行', real_name: '张三' }
+    };
   },
 
-  stopCamera() {
-    if (this.scanTimer) {
-      cancelAnimationFrame(this.scanTimer);
-      this.scanTimer = null;
-    }
-    if (this.stream) {
-      this.stream.getTracks().forEach(track => track.stop());
-      this.stream = null;
-    }
+  saveMethod(method) {
+    const prefs = this.getPreferences();
+    prefs.method = method;
+    localStorage.setItem('qr_user_preferred_withdraw', JSON.stringify(prefs));
   },
 
-  /**
-   * 解析本地上传的图片
-   */
-  parseImageFile(file) {
-    return new Promise((resolve, reject) => {
-      if (!file) {
-        return reject(new Error('未选择任何图片文件'));
-      }
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d', { willReadFrequently: true });
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0);
-
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          if (typeof jsQR === 'function') {
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-            if (code && code.data) {
-              resolve(code.data);
-              return;
-            }
-          }
-          reject(new Error('未能从所选图片中识别出有效的二维码'));
-        };
-        img.onerror = () => reject(new Error('图片加载失败'));
-        img.src = e.target.result;
-      };
-      reader.onerror = () => reject(new Error('读取文件失败'));
-      reader.readAsDataURL(file);
-    });
+  saveAccountDetails(method, details) {
+    const prefs = this.getPreferences();
+    prefs.method = method;
+    prefs[method] = { ...(prefs[method] || {}), ...details };
+    localStorage.setItem('qr_user_preferred_withdraw', JSON.stringify(prefs));
   }
 };
 

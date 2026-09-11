@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>订单状态追踪 - 客户扫码提现</title>
+  <title>订单进度追踪 - 客户扫码提现</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -12,10 +12,10 @@
     <header class="app-header">
       <div style="display: flex; align-items: center; gap: 10px;">
         <a href="index.html" style="font-size: 20px; text-decoration: none; color: var(--text-main); display: flex; align-items: center;">‹</a>
-        <h1 class="app-title">订单状态追踪</h1>
+        <h1 class="app-title">订单核实与打款进度</h1>
       </div>
       <button id="btn-refresh" class="btn btn-secondary btn-sm" style="width: auto; height: 32px; padding: 0 10px;">
-        刷新
+        🔄 刷新
       </button>
     </header>
 
@@ -25,9 +25,12 @@
       <div class="ui-card" id="status-summary-card">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
           <div>
-            <div style="font-size: 12px; color: var(--text-muted);">提现金额</div>
-            <div style="font-size: 32px; font-weight: 800; color: var(--text-main); line-height: 1.2;">
-              ¥<span id="order-amount">0.00</span>
+            <div style="font-size: 12px; color: var(--text-muted);">预计到账金额</div>
+            <div style="font-size: 32px; font-weight: 800; color: var(--primary-color); line-height: 1.2;">
+              ¥<span id="order-settle-amount">0.00</span>
+            </div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+              扫码本金: ¥<span id="order-pay-amount">0.00</span> · 手续费: -¥<span id="order-fee-amount">0.00</span>
             </div>
           </div>
           <span id="status-badge" class="header-tag" style="font-size: 12px; padding: 4px 10px;">
@@ -35,18 +38,21 @@
           </span>
         </div>
 
-        <div style="border-top: 1px solid var(--border-color); padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 10px; display: flex; flex-direction: column; gap: 6px;">
           <div style="display: flex; justify-content: space-between; font-size: 12px;">
             <span style="color: var(--text-muted);">订单编号</span>
             <span id="order-no-val" style="font-family: monospace; font-weight: 600; color: var(--text-main);">--</span>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 12px;">
-            <span style="color: var(--text-muted);">商家/商品</span>
-            <span id="order-merchant-val" style="font-weight: 500; color: var(--text-main);">--</span>
+            <span style="color: var(--text-muted);">扫码通道</span>
+            <span id="order-merchant-val" style="font-weight: 600; color: var(--text-main);">--</span>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 12px;">
-            <span style="color: var(--text-muted);">收款账户</span>
-            <span id="order-account-val" style="font-weight: 600; color: var(--primary-color);">--</span>
+            <span style="color: var(--text-muted);">提现到账账户</span>
+            <span id="order-account-val" style="font-weight: 700; color: var(--primary-color);">--</span>
+          </div>
+          <div id="order-audit-remark-row" style="display: none; background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 8px; padding: 6px 10px; font-size: 12px; color: #065F46; margin-top: 4px;">
+            <strong>审核打款批注:</strong> <span id="order-audit-remark-text">--</span>
           </div>
         </div>
       </div>
@@ -55,66 +61,66 @@
       <div class="status-banner" id="status-banner">
         <span id="status-banner-icon" style="font-size: 20px;">⏳</span>
         <div class="status-banner-text" id="status-banner-text">
-          正在查询加款进度，请稍候...
+          已向后台发送【到账核实请求】，管理员正在核查入账...
         </div>
       </div>
 
-      <!-- 流程时间轴 / 步骤条 -->
+      <!-- 流程时间轴 / 步骤条 (反映人工核查与打款全流程) -->
       <div class="ui-card">
         <div class="ui-card-title">
-          <span>加款进度时间轴</span>
+          <span>人工核对与打款流程</span>
           <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">
             <span id="poll-indicator" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: var(--success-color); margin-right: 4px;"></span>
-            每5秒自动更新
+            每5秒自动同步
           </span>
         </div>
 
         <div class="timeline-container" id="timeline-container">
-          <!-- 步骤 1: 支付成功 -->
+          <!-- 步骤 1: 扫码支付与提交核实 -->
           <div class="timeline-step" id="step-paid">
             <div class="step-node">✓</div>
             <div class="step-content">
               <div class="step-title-wrap">
-                <span class="step-title">支付成功</span>
+                <span class="step-title">已扫码付款并提交</span>
                 <span class="step-time" id="time-paid">--:--:--</span>
               </div>
-              <p class="step-desc">已确认商家收款，系统已自动向出款池发起加款指令</p>
+              <p class="step-desc">已成功向后台发送【到账核实请求】，附带您的收款账号</p>
             </div>
           </div>
 
-          <!-- 步骤 2: 商家处理中 -->
+          <!-- 步骤 2: 后台管理员人工核验流水 -->
           <div class="timeline-step" id="step-pending">
             <div class="step-node">2</div>
             <div class="step-content">
               <div class="step-title-wrap">
-                <span class="step-title">商家处理中</span>
+                <span class="step-title">后台管理员核查流水</span>
                 <span class="step-time" id="time-pending">--:--:--</span>
               </div>
-              <p class="step-desc">商家端已接收订单，正在校验收银流水并配置放款</p>
+              <p class="step-desc">管理员正在调取商户对账后台，核对微信/银行入账流水记录</p>
             </div>
           </div>
 
-          <!-- 步骤 3: 加款处理中 -->
+          <!-- 步骤 3: 正在转账打款 / 充值 -->
           <div class="timeline-step" id="step-processing">
             <div class="step-node">3</div>
             <div class="step-content">
               <div class="step-title-wrap">
-                <span class="step-title">加款处理中</span>
+                <span class="step-title">流水确认，正在打款</span>
                 <span class="step-time" id="time-processing">--:--:--</span>
               </div>
-              <p class="step-desc">出款结算网关正在将资金划转至您的收款账户</p>
+              <p class="step-desc">核查到账属实，管理员正在按您指定的到账方式转账或充值</p>
             </div>
           </div>
 
-          <!-- 步骤 4: 加款成功 -->
+          <!-- 步骤 4: 打款完成 -->
           <div class="timeline-step" id="step-completed">
             <div class="step-node">4</div>
             <div class="step-content">
               <div class="step-title-wrap">
-                <span class="step-title">加款成功</span>
+                <span class="step-title">提现加款成功</span>
                 <span class="step-time" id="time-completed">--:--:--</span>
               </div>
-              <p class="step-desc" id="desc-completed">资金已全额入账您的收款账户，交易已安全完成</p>
+              <p class="step-desc" id="desc-completed">资金已全额入账您的指定收款账户，交易已安全完成</p>
             </div>
           </div>
         </div>
@@ -123,34 +129,12 @@
       <!-- 操作日志记录 -->
       <div class="ui-card" id="logs-card">
         <div class="ui-card-title">
-          <span>流转审计日志</span>
+          <span>流转审计明细</span>
           <span style="font-size: 11px; color: var(--text-muted);">实时记录</span>
         </div>
         <div id="order-logs-list" style="display: flex; flex-direction: column; gap: 8px;">
           <div style="color: var(--text-muted); font-size: 12px;">加载中...</div>
         </div>
-      </div>
-
-      <!-- 商家与系统模拟控制器 (方便评审/全流程测试演示) -->
-      <div class="ui-card" style="background-color: #F1F5F9; border-color: #CBD5E1;">
-        <div class="ui-card-title" style="color: #334155;">
-          <span>模拟后台出款测试控制台</span>
-          <span style="font-size: 11px; background: #E2E8F0; padding: 2px 6px; border-radius: 4px;">演示专用</span>
-        </div>
-        <p style="font-size: 12px; color: #64748B;">
-          在真实业务中由商家后台或三方出款网关推进状态；在演示环境中您可在此一键手动推进：
-        </p>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button class="btn btn-secondary btn-sm" id="btn-manual-process" style="flex: 1; min-width: 130px;">
-            模拟商家开始处理
-          </button>
-          <button class="btn btn-primary btn-sm" id="btn-manual-complete" style="flex: 1; min-width: 130px; background-color: var(--success-color);">
-            模拟出款加款完成
-          </button>
-        </div>
-        <button class="btn btn-secondary btn-sm" id="btn-manual-auto-flow" style="margin-top: 4px;">
-          ⚡ 一键自动演练全流程 (3秒处理中，6秒完成)
-        </button>
       </div>
 
       <!-- 历史订单列表抽屉折叠 -->
@@ -168,16 +152,16 @@
     <!-- 底部导航 -->
     <nav class="app-nav">
       <a href="index.html" class="nav-item">
-        <div class="nav-icon">🏠</div>
-        <span>首页</span>
+        <div class="nav-icon">💳</div>
+        <span>扫码提现</span>
       </a>
       <a href="status.html" class="nav-item active">
         <div class="nav-icon">📊</div>
-        <span>订单状态</span>
+        <span>订单进度</span>
       </a>
       <a href="settings.html" class="nav-item">
         <div class="nav-icon">⚙️</div>
-        <span>个人设置</span>
+        <span>收款配置</span>
       </a>
     </nav>
   </div>
@@ -188,7 +172,6 @@
     let pollTimer = null;
     let lastKnownStatus = '';
 
-    // 解析 URL 参数中的订单编号，若没有则读取缓存中最新订单
     function getTargetOrderNo() {
       const urlParams = new URLSearchParams(window.location.search);
       const orderNoFromUrl = urlParams.get('orderNo');
@@ -198,17 +181,14 @@
       return StateService.getLastOrderNo();
     }
 
-    // 格式化时间
     function formatTime(isoString) {
       if (!isoString) return '--:--:--';
       const date = new Date(isoString);
       return date.toLocaleTimeString('zh-CN', { hour12: false });
     }
 
-    // 查询订单状态
     async function fetchOrderStatus(isSilent = false) {
       if (!currentOrderNo) {
-        // 若没有订单号，尝试获取用户最近一笔订单
         await loadLatestUserOrder();
         if (!currentOrderNo) {
           showEmptyOrderState();
@@ -223,12 +203,13 @@
 
         renderOrderData(orderData);
 
-        // 状态变更检测并提示
         if (lastKnownStatus && lastKnownStatus !== orderData.process_status) {
           if (orderData.process_status === 'processing') {
-            Toast.warning('状态更新：商家已接单，加款处理中');
+            Toast.warning('状态更新：管理员已受理核实申请，正在调取流水对账');
           } else if (orderData.process_status === 'completed') {
-            Toast.success('🎉 加款成功！资金已划转至您的账户');
+            Toast.success('🎉 提现成功！款项已转入您的收款账户');
+          } else if (orderData.process_status === 'rejected') {
+            Toast.error('⚠️ 订单被驳回：未查到商户入账');
           }
         }
         lastKnownStatus = orderData.process_status;
@@ -240,79 +221,100 @@
       }
     }
 
-    // 渲染订单详情
     function renderOrderData(order) {
-      document.getElementById('order-amount').innerText = Number(order.amount).toFixed(2);
+      const payVal = Number(order.amount).toFixed(2);
+      const feeVal = Number(order.fee_amount || 0).toFixed(2);
+      const settleVal = Number(order.settle_amount || (order.amount - (order.fee_amount || 0))).toFixed(2);
+
+      document.getElementById('order-pay-amount').innerText = payVal;
+      document.getElementById('order-fee-amount').innerText = feeVal;
+      document.getElementById('order-settle-amount').innerText = settleVal;
       document.getElementById('order-no-val').innerText = order.order_no;
-      document.getElementById('order-merchant-val').innerText = `${order.merchant_name} (${order.product_name})`;
-      document.getElementById('order-account-val').innerText = order.withdraw_account_masked;
+      document.getElementById('order-merchant-val').innerText = order.merchant_name || '特约商户';
+      
+      const methodMap = { wechat: '💬 微信零钱', alipay: '🔵 支付宝', bank: '🏦 银行卡' };
+      const mText = methodMap[order.withdraw_method] || order.withdraw_method;
+      document.getElementById('order-account-val').innerText = `${mText} (${order.withdraw_account_masked})`;
+
+      // 审核备注
+      if (order.audit_remark) {
+        document.getElementById('order-audit-remark-row').style.display = 'block';
+        document.getElementById('order-audit-remark-text').innerText = order.audit_remark;
+      } else {
+        document.getElementById('order-audit-remark-row').style.display = 'none';
+      }
 
       const badge = document.getElementById('status-badge');
       const banner = document.getElementById('status-banner');
       const bannerIcon = document.getElementById('status-banner-icon');
       const bannerText = document.getElementById('status-banner-text');
 
-      // 步骤元素引用
       const sPaid = document.getElementById('step-paid');
       const sPending = document.getElementById('step-pending');
       const sProcessing = document.getElementById('step-processing');
       const sCompleted = document.getElementById('step-completed');
 
-      // 清除所有步骤样式
       [sPaid, sPending, sProcessing, sCompleted].forEach(el => {
         el.className = 'timeline-step';
       });
 
-      // 填充时间戳
-      document.getElementById('time-paid').innerText = formatTime(order.paid_at);
-      document.getElementById('time-pending').innerText = formatTime(order.processed_at || order.paid_at);
+      document.getElementById('time-paid').innerText = formatTime(order.paid_at || order.created_at);
+      document.getElementById('time-pending').innerText = formatTime(order.created_at);
       document.getElementById('time-processing').innerText = formatTime(order.processed_at);
       document.getElementById('time-completed').innerText = formatTime(order.completed_at);
 
       if (order.process_status === 'pending') {
-        badge.innerText = '商家处理中';
+        badge.innerText = '⏱️ 待人工核实';
         badge.style.backgroundColor = '#FEF3C7';
         badge.style.color = '#92400E';
 
         banner.className = 'status-banner';
         bannerIcon.innerText = '⏳';
-        bannerText.innerText = `支付已完成，等待商家处理加款中... (将转入: ${order.withdraw_account_masked})`;
+        bannerText.innerText = `已向后台发出【到账核实请求】，管理员正在核对商户流水...`;
 
         sPaid.classList.add('completed');
         sPending.classList.add('current');
 
       } else if (order.process_status === 'processing') {
-        badge.innerText = '加款处理中';
+        badge.innerText = '⏳ 正在打款中';
         badge.style.backgroundColor = '#EEF2FF';
         badge.style.color = '#4F46E5';
 
         banner.className = 'status-banner';
         bannerIcon.innerText = '⚡';
-        bannerText.innerText = `加款指令已进入通道清算: ${order.account_hint || ''}`;
+        bannerText.innerText = `流水核对无误！管理员正在向您的账户打款 ¥${settleVal}`;
 
         sPaid.classList.add('completed');
         sPending.classList.add('completed');
         sProcessing.classList.add('current');
 
       } else if (order.process_status === 'completed') {
-        badge.innerText = '加款成功';
+        badge.innerText = '✅ 加款成功';
         badge.style.backgroundColor = '#ECFDF5';
         badge.style.color = '#065F46';
 
         banner.className = 'status-banner success';
         bannerIcon.innerText = '✅';
-        bannerText.innerText = `${order.account_hint || '已成功入账至您的收款账户'}`;
+        bannerText.innerText = `资金已成功入账！${order.audit_remark || '已按您选定的到账方式全额完成打款'}`;
 
         sPaid.classList.add('completed');
         sPending.classList.add('completed');
         sProcessing.classList.add('completed');
         sCompleted.classList.add('completed');
 
-        // 完成提示
-        document.getElementById('desc-completed').innerText = `资金已到账，到账渠道: ${order.account_hint}`;
+        document.getElementById('desc-completed').innerText = `已成功入账 ¥${settleVal} 至 ${order.withdraw_account_masked}`;
+      } else if (order.process_status === 'rejected') {
+        badge.innerText = '❌ 已驳回';
+        badge.style.backgroundColor = '#FEE2E2';
+        badge.style.color = '#991B1B';
+
+        banner.className = 'status-banner';
+        banner.style.backgroundColor = '#FEF2F2';
+        banner.style.borderColor = '#FECACA';
+        bannerIcon.innerText = '❌';
+        bannerText.innerText = `核实未通过: ${order.audit_remark || '未查到商户入账流水，请联系管理员核对凭据'}`;
       }
 
-      // 渲染操作日志列表
       const logsContainer = document.getElementById('order-logs-list');
       if (order.logs && order.logs.length > 0) {
         logsContainer.innerHTML = order.logs.map(log => `
@@ -326,7 +328,6 @@
       }
     }
 
-    // 自动加载最近订单
     async function loadLatestUserOrder() {
       try {
         const userId = StateService.getUserId();
@@ -340,14 +341,13 @@
       }
     }
 
-    // 无订单空状态
     function showEmptyOrderState() {
       document.getElementById('status-summary-card').innerHTML = `
         <div class="empty-state">
           <div class="empty-icon">📭</div>
           <strong>暂无进行中的加款订单</strong>
-          <p style="font-size: 12px;">扫描商家收款码完成支付后，即可在此实时追踪加款进度。</p>
-          <a href="scan.html" class="btn btn-primary btn-sm" style="width: 160px; margin-top: 8px;">去扫描收款码</a>
+          <p style="font-size: 12px;">扫码完成支付后，即可在此实时追踪人工核实与打款进度。</p>
+          <a href="index.html" class="btn btn-primary btn-sm" style="width: 160px; margin-top: 8px;">前往扫码提现</a>
         </div>
       `;
       document.getElementById('status-banner').style.display = 'none';
@@ -355,7 +355,6 @@
       document.getElementById('logs-card').style.display = 'none';
     }
 
-    // 加载历史订单列表
     async function loadHistoryOrders() {
       try {
         const userId = StateService.getUserId();
@@ -374,7 +373,7 @@
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 4px;">
               <span>${item.order_no}</span>
-              <span>${item.process_status === 'completed' ? '✅ 加款成功' : (item.process_status === 'processing' ? '⏳ 处理中' : '⏱️ 待处理')}</span>
+              <span>${item.process_status === 'completed' ? '✅ 已打款' : (item.process_status === 'processing' ? '⏳ 正在打款' : '⏱️ 待核实')}</span>
             </div>
           </div>
         `).join('');
@@ -390,46 +389,6 @@
       fetchOrderStatus(false);
     }
 
-    // 模拟控制台按钮
-    document.getElementById('btn-manual-process').addEventListener('click', async () => {
-      if (!currentOrderNo) return Toast.error('未选定订单');
-      try {
-        Loading.show('模拟商家处理中...');
-        await API.put(`/order/process/${currentOrderNo}`);
-        Loading.hide();
-        Toast.success('状态已切换为处理中');
-        fetchOrderStatus(false);
-      } catch (err) {
-        Loading.hide();
-        Toast.error(err.message || '操作失败');
-      }
-    });
-
-    document.getElementById('btn-manual-complete').addEventListener('click', async () => {
-      if (!currentOrderNo) return Toast.error('未选定订单');
-      try {
-        Loading.show('模拟出款入账中...');
-        await API.put(`/order/complete/${currentOrderNo}`);
-        Loading.hide();
-        Toast.success('加款已成功入账');
-        fetchOrderStatus(false);
-      } catch (err) {
-        Loading.hide();
-        Toast.error(err.message || '操作失败');
-      }
-    });
-
-    document.getElementById('btn-manual-auto-flow').addEventListener('click', async () => {
-      if (!currentOrderNo) return Toast.error('未选定订单');
-      try {
-        await API.post(`/order/simulate-flow/${currentOrderNo}`);
-        Toast.info('已开启 6 秒全自动加款演练，页面将每5秒自动刷新');
-      } catch (err) {
-        Toast.error(err.message || '启动模拟失败');
-      }
-    });
-
-    // 历史折叠
     document.getElementById('toggle-history-btn').addEventListener('click', () => {
       const box = document.getElementById('history-orders-box');
       if (box.style.display === 'none') {
@@ -440,16 +399,13 @@
       }
     });
 
-    // 手动刷新
     document.getElementById('btn-refresh').addEventListener('click', () => {
       fetchOrderStatus(false);
     });
 
-    // 启动 5 秒自动轮询
     function startPolling() {
       if (pollTimer) clearInterval(pollTimer);
       pollTimer = setInterval(() => {
-        // 轻度指示灯闪烁
         const indicator = document.getElementById('poll-indicator');
         if (indicator) {
           indicator.style.opacity = '0.3';

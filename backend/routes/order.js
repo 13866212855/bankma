@@ -21,7 +21,7 @@ function generateOrderNo() {
 
 /**
  * POST /api/order/create
- * 用户确认支付后创建订单（自动触发加款申请）
+ * 用户确认支付后发起【到账核实请求】与提现申请
  */
 router.post('/create', async (req, res, next) => {
   try {
@@ -35,13 +35,53 @@ router.post('/create', async (req, res, next) => {
       }
     }
 
-    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+    const numAmount = parseFloat(amount);
+    if (!amount || isNaN(numAmount) || numAmount <= 0) {
       return res.status(400).json({
         code: 400,
-        message: '订单金额不合法',
+        message: '支付金额不合法，请输入有效金额',
         data: null
       });
     }
+
+    // 查询该二维码渠道费率与限额
+    let feeRate = 0.8;
+    let merchantName = '合作商户';
+    let productName = '扫码加款';
+    let maxLimit = 10000;
+    let minLimit = 1;
+
+    if (qrcode_id) {
+      const mchRes = await query('SELECT merchant_name, product_name, fee_rate, max_limit, min_limit FROM merchant_qrcodes WHERE id = $1', [qrcode_id]);
+      if (mchRes.rowCount > 0) {
+        const m = mchRes.rows[0];
+        merchantName = m.merchant_name;
+        productName = m.product_name;
+        feeRate = parseFloat(m.fee_rate || 0.8);
+        maxLimit = parseFloat(m.max_limit || 10000);
+        minLimit = parseFloat(m.min_limit || 1);
+      }
+    }
+
+    // 校验限额
+    if (numAmount < minLimit) {
+      return res.status(400).json({
+        code: 400,
+        message: `本次支付金额低于该渠道单笔最低限额 (¥${minLimit.toFixed(2)})，请调整金额或切换通道`,
+        data: null
+      });
+    }
+    if (numAmount > maxLimit) {
+      return res.status(400).json({
+        code: 400,
+        message: `本次支付金额超过该渠道单笔最高限额 (¥${maxLimit.toFixed(2)})，请调整金额或切换到更高限额收款码`,
+        data: null
+      });
+    }
+
+    // 计算手续费与实际到账金额 (例如 1000元，费率0.8%，手续费=8元，实到=992元)
+    const feeAmount = parseFloat(((numAmount * feeRate) / 100).toFixed(2));
+    const settleAmount = parseFloat((numAmount - feeAmount).toFixed(2));
 
     // 若未显式传入提现账户，则自动读取用户的默认收款方式
     if (!withdraw_method || !withdraw_account) {
@@ -61,7 +101,6 @@ router.post('/create', async (req, res, next) => {
         real_name = real_name || conf.real_name;
         bank_name = bank_name || conf.bank_name;
       } else {
-        // 若用户尚未配置，则根据默认行为创建微信默认提现通道
         withdraw_method = 'wechat';
         withdraw_account = 'wx_user_' + Date.now().toString().slice(-6);
         real_name = '客户收款人';
@@ -71,46 +110,54 @@ router.post('/create', async (req, res, next) => {
     const orderNo = generateOrderNo();
     const encryptedAccount = encrypt(withdraw_account);
 
-    // 插入订单表（状态直接设为支付成功 paid，处理状态为待加款 pending）
+    // 插入订单表（状态直接设为支付成功 paid，处理状态为待人工核实 pending）
     const orderInsert = await query(
       `INSERT INTO orders (
-        order_no, user_id, qrcode_id, amount, pay_status, process_status, 
-        withdraw_method, withdraw_account, paid_at
-      ) VALUES ($1, $2, $3, $4, 'paid', 'pending', $5, $6, NOW())
+        order_no, user_id, qrcode_id, amount, fee_rate, fee_amount, settle_amount,
+        pay_status, process_status, withdraw_method, withdraw_account, withdraw_name, withdraw_bank, paid_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'paid', 'pending', $8, $9, $10, $11, NOW())
       RETURNING *`,
-      [orderNo, user_id, qrcode_id || null, parseFloat(amount), withdraw_method, encryptedAccount]
+      [orderNo, user_id, qrcode_id || null, numAmount, feeRate, feeAmount, settleAmount, withdraw_method, encryptedAccount, real_name || null, bank_name || null]
     );
 
     const newOrder = orderInsert.rows[0];
 
-    // 自动记录首条操作日志
+    // 自动更新或保存用户的收款偏好配置（记住用户的上一次选择）
+    try {
+      await query(`
+        UPDATE user_withdraw_config SET is_default = false WHERE user_id = $1
+      `, [user_id]);
+
+      await query(`
+        INSERT INTO user_withdraw_config (user_id, method, account, real_name, bank_name, is_default, updated_at)
+        VALUES ($1, $2, $3, $4, $5, true, NOW())
+      `, [user_id, withdraw_method, encryptedAccount, real_name || null, bank_name || null]);
+    } catch (e) {
+      console.warn('[DB] 记住提现账户偏好告警:', e.message);
+    }
+
+    // 记录首条操作日志
     await query(
       `INSERT INTO order_logs (order_id, status, remark, created_at)
-       VALUES ($1, 'paid', '客户扫码支付成功，系统自动发起加款申请', NOW())`,
-      [newOrder.id]
+       VALUES ($1, 'pending', $2, NOW())`,
+      [newOrder.id, `用户发起【到账核实请求】(支付本金: ¥${numAmount.toFixed(2)}, 费率: ${feeRate}%, 手续费: ¥${feeAmount.toFixed(2)}, 预计到账: ¥${settleAmount.toFixed(2)})，等待后台管理员核查账单流水并打款`]
     );
-
-    // 查询关联的商家与商品名称
-    let merchantName = '合作商家';
-    let productName = '加款消费';
-    if (qrcode_id) {
-      const mchRes = await query('SELECT merchant_name, product_name FROM merchant_qrcodes WHERE id = $1', [qrcode_id]);
-      if (mchRes.rowCount > 0) {
-        merchantName = mchRes.rows[0].merchant_name;
-        productName = mchRes.rows[0].product_name;
-      }
-    }
 
     return res.json({
       code: 200,
-      message: '订单支付成功，已自动提交加款申请',
+      message: '到账核实请求已提交，等待后台人工核实',
       data: {
         order_no: newOrder.order_no,
         amount: parseFloat(newOrder.amount),
+        fee_rate: parseFloat(newOrder.fee_rate || feeRate),
+        fee_amount: parseFloat(newOrder.fee_amount || feeAmount),
+        settle_amount: parseFloat(newOrder.settle_amount || settleAmount),
         pay_status: newOrder.pay_status,
         process_status: newOrder.process_status,
         withdraw_method: newOrder.withdraw_method,
         withdraw_account_masked: maskAccount(withdraw_account, newOrder.withdraw_method),
+        withdraw_name: real_name,
+        withdraw_bank: bank_name,
         merchant_name: merchantName,
         product_name: productName,
         paid_at: newOrder.paid_at
@@ -131,7 +178,7 @@ router.get('/status/:orderNo', async (req, res, next) => {
     const { orderNo } = req.params;
 
     const orderRes = await query(
-      `SELECT o.*, m.merchant_name, m.product_name, u.phone as user_phone
+      `SELECT o.*, m.merchant_name, m.product_name, m.channel_desc, u.phone as user_phone
        FROM orders o
        LEFT JOIN merchant_qrcodes m ON o.qrcode_id = m.id
        LEFT JOIN users u ON o.user_id = u.id
@@ -162,45 +209,55 @@ router.get('/status/:orderNo', async (req, res, next) => {
     );
 
     // 计算步骤条进度高亮
-    // steps: paid -> processing -> completed
+    // steps: 1. 提交到账核实 -> 2. 人工流水核对 -> 3. 人工打款转账 -> 4. 到账完成
+    const isPending = order.process_status === 'pending';
+    const isProcessing = order.process_status === 'processing';
+    const isCompleted = order.process_status === 'completed';
+    const isRejected = order.process_status === 'rejected';
+
     const steps = [
       {
         key: 'paid',
-        title: '支付成功',
+        title: '已提交核实请求',
+        desc: '客户长按扫码支付完成，已向后台发起人工到账核实',
         timestamp: order.paid_at,
         completed: true,
-        current: order.process_status === 'pending'
+        current: isPending
       },
       {
         key: 'pending',
-        title: '商家处理中',
-        timestamp: order.processed_at || (order.process_status !== 'pending' ? order.paid_at : null),
-        completed: order.process_status === 'processing' || order.process_status === 'completed',
-        current: order.process_status === 'pending'
+        title: '管理员账单核对',
+        desc: '后台管理员核实微信商户/银行真实入账账单明细',
+        timestamp: order.processed_at || (isPending ? null : order.paid_at),
+        completed: isProcessing || isCompleted,
+        current: isPending || isProcessing
       },
       {
         key: 'processing',
-        title: '加款处理中',
+        title: '人工打款出款',
+        desc: `按用户指定到账方式 (${order.withdraw_method === 'wechat' ? '微信零钱' : order.withdraw_method === 'alipay' ? '支付宝' : '银行卡'}) 进行加款转账`,
         timestamp: order.processed_at,
-        completed: order.process_status === 'completed',
-        current: order.process_status === 'processing'
+        completed: isCompleted,
+        current: isProcessing
       },
       {
         key: 'completed',
-        title: '加款成功',
+        title: isRejected ? '核实未通过' : '加款到账成功',
+        desc: isRejected ? (order.audit_remark || '未能核查到对应支付流水，请核实后重试') : '资金已全额入账您的指定收款账户，加款完成',
         timestamp: order.completed_at,
-        completed: order.process_status === 'completed',
-        current: false
+        completed: isCompleted,
+        current: false,
+        rejected: isRejected
       }
     ];
 
     let accountHint = '';
     if (order.withdraw_method === 'wechat') {
-      accountHint = `已转入您的微信账户 (${masked})`;
+      accountHint = `接收微信：${masked} (${order.withdraw_name || '已实名'})`;
     } else if (order.withdraw_method === 'alipay') {
-      accountHint = `已转入您的支付宝账户 (${masked})`;
+      accountHint = `接收支付宝：${masked} (${order.withdraw_name || '已实名'})`;
     } else if (order.withdraw_method === 'bank') {
-      accountHint = `已汇往您的银行卡账户 (${masked})`;
+      accountHint = `接收银行卡：${order.withdraw_bank || '银行卡'} (${masked}) · ${order.withdraw_name || ''}`;
     }
 
     return res.json({
@@ -209,13 +266,20 @@ router.get('/status/:orderNo', async (req, res, next) => {
       data: {
         order_no: order.order_no,
         amount: parseFloat(order.amount),
+        fee_rate: parseFloat(order.fee_rate || 0.8),
+        fee_amount: parseFloat(order.fee_amount || 0.0),
+        settle_amount: parseFloat(order.settle_amount || order.amount),
         pay_status: order.pay_status,
         process_status: order.process_status,
         withdraw_method: order.withdraw_method,
         withdraw_account_masked: masked,
+        withdraw_name: order.withdraw_name,
+        withdraw_bank: order.withdraw_bank,
+        audit_remark: order.audit_remark,
         account_hint: accountHint,
         merchant_name: order.merchant_name || '合作商户',
-        product_name: order.product_name || '提现充值',
+        product_name: order.product_name || '扫码加款',
+        channel_desc: order.channel_desc || '',
         paid_at: order.paid_at,
         processed_at: order.processed_at,
         completed_at: order.completed_at,

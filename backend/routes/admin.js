@@ -7,7 +7,7 @@ const express = require('express');
 const router = express.Router();
 const QRCode = require('qrcode');
 const { query } = require('../models/db');
-const { maskAccount } = require('../utils/crypto');
+const { maskAccount, decrypt } = require('../utils/crypto');
 
 // 简单高效的管理端 Token 缓存
 const activeAdminTokens = new Set(['admin_dev_token_secret_123']);
@@ -104,12 +104,12 @@ router.get('/check', requireAdmin, (req, res) => {
 
 /**
  * GET /api/admin/qrcodes
- * 获取所有商家收款码列表（管理端，含激活状态与创建时间）
+ * 获取所有商家收款码列表（管理端，含激活状态、费率与限额）
  */
 router.get('/qrcodes', requireAdmin, async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT id, merchant_name, product_name, amount, qr_content, qr_image_url, is_active, created_at
+      `SELECT id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at
        FROM merchant_qrcodes
        ORDER BY is_active DESC, id DESC`
     );
@@ -118,7 +118,11 @@ router.get('/qrcodes', requireAdmin, async (req, res, next) => {
       id: item.id,
       merchant_name: item.merchant_name,
       product_name: item.product_name,
-      amount: parseFloat(item.amount),
+      amount: parseFloat(item.amount || 0),
+      fee_rate: parseFloat(item.fee_rate || 0.8),
+      max_limit: parseFloat(item.max_limit || 10000),
+      min_limit: parseFloat(item.min_limit || 1),
+      channel_desc: item.channel_desc || '',
       qr_content: item.qr_content,
       qr_image_url: item.qr_image_url,
       is_active: Boolean(item.is_active),
@@ -140,32 +144,43 @@ router.get('/qrcodes', requireAdmin, async (req, res, next) => {
 
 /**
  * POST /api/admin/qrcode
- * 后台上传/录入供前端展示与识别的二维码图片
+ * 后台上传/录入收款码（支持指定不同收款码的手续费率和单笔限额）
  */
 router.post('/qrcode', requireAdmin, async (req, res, next) => {
   try {
-    const { merchant_name, product_name, amount, qr_content, qr_image_url, is_active } = req.body;
+    const { 
+      merchant_name, 
+      product_name, 
+      amount, 
+      fee_rate, 
+      max_limit, 
+      min_limit, 
+      channel_desc, 
+      qr_content, 
+      qr_image_url, 
+      is_active 
+    } = req.body;
 
-    if (!merchant_name || !amount) {
+    if (!merchant_name) {
       return res.status(400).json({
         code: 400,
-        message: '商家名称与应付金额为必填项',
+        message: '收款通道商户名称为必填项 (例如: 建设银行收款码、安徽农金收款码)',
         data: null
       });
     }
 
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      return res.status(400).json({
-        code: 400,
-        message: '金额必须为大于 0 的数字',
-        data: null
-      });
+    const numAmount = parseFloat(amount || 0);
+    const numFeeRate = parseFloat(fee_rate !== undefined ? fee_rate : 0.8);
+    const numMaxLimit = parseFloat(max_limit || 10000);
+    const numMinLimit = parseFloat(min_limit || 1);
+
+    if (isNaN(numFeeRate) || numFeeRate < 0) {
+      return res.status(400).json({ code: 400, message: '手续费率必须为大于等于0的数值 (如0.8代表0.8%)' });
     }
 
     // 默认或自动生成的识别标识
     const finalContent = (qr_content && qr_content.trim()) ||
-      `MCH_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}_${numAmount.toFixed(2)}`;
+      `MCH_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}_${numMaxLimit}`;
 
     // 若未直接上传图片则使用 qrcode 库由内容生成
     let finalImageUrl = qr_image_url;
@@ -183,13 +198,18 @@ router.post('/qrcode', requireAdmin, async (req, res, next) => {
     }
 
     const insertResult = await query(
-      `INSERT INTO merchant_qrcodes (merchant_name, product_name, amount, qr_content, qr_image_url, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO merchant_qrcodes 
+        (merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         merchant_name.trim(),
-        (product_name || '扫码支付加款').trim(),
+        (product_name || '扫码加款收款通道').trim(),
         numAmount,
+        numFeeRate,
+        numMaxLimit,
+        numMinLimit,
+        channel_desc || '',
         finalContent,
         finalImageUrl,
         shouldBeActive
@@ -198,7 +218,7 @@ router.post('/qrcode', requireAdmin, async (req, res, next) => {
 
     return res.json({
       code: 200,
-      message: '二维码上传保存成功',
+      message: '收款码上传配置成功',
       data: insertResult.rows[0]
     });
   } catch (error) {
@@ -232,7 +252,7 @@ router.put('/qrcode/:id/set-active', requireAdmin, async (req, res, next) => {
 
     return res.json({
       code: 200,
-      message: '已成功设为前端默认展示收款码',
+      message: '已成功切换为当前默认收款码',
       data: result.rows[0]
     });
   } catch (error) {
@@ -256,7 +276,6 @@ router.delete('/qrcode/:id', requireAdmin, async (req, res, next) => {
       return res.status(404).json({ code: 404, message: '二维码不存在或已被删除' });
     }
 
-    // 如果删除了激活的二维码，且还有其他码，自动将最新的一条置为激活
     if (delResult.rows[0].is_active) {
       await query(`
         UPDATE merchant_qrcodes 
@@ -277,7 +296,7 @@ router.delete('/qrcode/:id', requireAdmin, async (req, res, next) => {
 
 /**
  * GET /api/admin/orders
- * 查看所有订单列表
+ * 查看所有订单列表（管理端，附带完整明细供人工核实和打款）
  */
 router.get('/orders', requireAdmin, async (req, res, next) => {
   try {
@@ -288,32 +307,165 @@ router.get('/orders', requireAdmin, async (req, res, next) => {
         o.user_id,
         o.qrcode_id,
         o.amount,
+        o.fee_rate,
+        o.fee_amount,
+        o.settle_amount,
         o.pay_status,
         o.process_status,
         o.withdraw_method,
         o.withdraw_account,
+        o.withdraw_name,
+        o.withdraw_bank,
+        o.audit_remark,
         o.paid_at,
         o.processed_at,
         o.completed_at,
         o.created_at,
         m.merchant_name,
-        m.product_name
+        m.product_name,
+        m.channel_desc
       FROM orders o
       LEFT JOIN merchant_qrcodes m ON o.qrcode_id = m.id
       ORDER BY o.id DESC
-      LIMIT 50
+      LIMIT 100
     `);
 
-    const orders = result.rows.map(row => ({
-      ...row,
-      amount: parseFloat(row.amount),
-      withdraw_account_masked: maskAccount(row.withdraw_account || '', row.withdraw_method)
-    }));
+    const orders = result.rows.map(row => {
+      let plainAccount = '';
+      try {
+        plainAccount = decrypt(row.withdraw_account || '');
+      } catch (e) {
+        plainAccount = row.withdraw_account || '';
+      }
+      return {
+        ...row,
+        amount: parseFloat(row.amount),
+        fee_rate: parseFloat(row.fee_rate || 0.8),
+        fee_amount: parseFloat(row.fee_amount || 0),
+        settle_amount: parseFloat(row.settle_amount || row.amount),
+        withdraw_account_plain: plainAccount,
+        withdraw_account_masked: maskAccount(plainAccount, row.withdraw_method)
+      };
+    });
 
     return res.json({
       code: 200,
       message: '获取成功',
       data: orders
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/admin/orders/:orderNo/start-verify
+ * 管理员开始人工核实 (变为 processing 状态)
+ */
+router.put('/orders/:orderNo/start-verify', requireAdmin, async (req, res, next) => {
+  try {
+    const { orderNo } = req.params;
+    const updateRes = await query(
+      `UPDATE orders 
+       SET process_status = 'processing', processed_at = NOW() 
+       WHERE order_no = $1 
+       RETURNING *`,
+      [orderNo]
+    );
+
+    if (updateRes.rowCount === 0) {
+      return res.status(404).json({ code: 404, message: '未找到对应订单' });
+    }
+
+    const order = updateRes.rows[0];
+    await query(
+      `INSERT INTO order_logs (order_id, status, remark, created_at)
+       VALUES ($1, 'processing', '后台管理员已受理【到账核实请求】，正在调取微信/银行商户后台核对实际到账流水', NOW())`,
+      [order.id]
+    );
+
+    return res.json({
+      code: 200,
+      message: '已开始人工核实对账',
+      data: order
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/admin/orders/:orderNo/verify-and-complete
+ * 管理员核实款项真实到账，并已向用户微信/支付宝/银行卡打款完成
+ */
+router.put('/orders/:orderNo/verify-and-complete', requireAdmin, async (req, res, next) => {
+  try {
+    const { orderNo } = req.params;
+    const { remark } = req.body;
+    const auditRemark = remark || '管理员已人工核验商户流水入账，且已按客户指定到账方式完成充值/转账打款';
+
+    const updateRes = await query(
+      `UPDATE orders 
+       SET process_status = 'completed', completed_at = NOW(), audit_remark = $1
+       WHERE order_no = $2 
+       RETURNING *`,
+      [auditRemark, orderNo]
+    );
+
+    if (updateRes.rowCount === 0) {
+      return res.status(404).json({ code: 404, message: '未找到对应订单' });
+    }
+
+    const order = updateRes.rows[0];
+    await query(
+      `INSERT INTO order_logs (order_id, status, remark, created_at)
+       VALUES ($1, 'completed', $2, NOW())`,
+      [order.id, `【人工打款完成】${auditRemark}`]
+    );
+
+    return res.json({
+      code: 200,
+      message: '人工核实与打款已标记完成',
+      data: order
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/admin/orders/:orderNo/reject
+ * 管理员核实未通过/未查到流水驳回
+ */
+router.put('/orders/:orderNo/reject', requireAdmin, async (req, res, next) => {
+  try {
+    const { orderNo } = req.params;
+    const { remark } = req.body;
+    const auditRemark = remark || '商户后台未核查到对应金额入账流水，或微信支付未成功，核实未通过';
+
+    const updateRes = await query(
+      `UPDATE orders 
+       SET process_status = 'rejected', completed_at = NOW(), audit_remark = $1
+       WHERE order_no = $2 
+       RETURNING *`,
+      [auditRemark, orderNo]
+    );
+
+    if (updateRes.rowCount === 0) {
+      return res.status(404).json({ code: 404, message: '未找到对应订单' });
+    }
+
+    const order = updateRes.rows[0];
+    await query(
+      `INSERT INTO order_logs (order_id, status, remark, created_at)
+       VALUES ($1, 'rejected', $2, NOW())`,
+      [order.id, `【核实未通过驳回】${auditRemark}`]
+    );
+
+    return res.json({
+      code: 200,
+      message: '订单已驳回',
+      data: order
     });
   } catch (error) {
     next(error);

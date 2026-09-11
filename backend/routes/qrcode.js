@@ -102,7 +102,7 @@ router.post('/parse', async (req, res, next) => {
 router.get(['/active', '/merchant/active'], async (req, res, next) => {
   try {
     let result = await query(
-      `SELECT id, merchant_name, product_name, amount, qr_content, qr_image_url, is_active, created_at 
+      `SELECT id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at 
        FROM merchant_qrcodes 
        WHERE is_active = true 
        ORDER BY id DESC 
@@ -112,7 +112,7 @@ router.get(['/active', '/merchant/active'], async (req, res, next) => {
     // 如果没有激活的，则取最新的一条
     if (result.rows.length === 0) {
       result = await query(
-        `SELECT id, merchant_name, product_name, amount, qr_content, qr_image_url, is_active, created_at 
+        `SELECT id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at 
          FROM merchant_qrcodes 
          ORDER BY id DESC 
          LIMIT 1`
@@ -143,7 +143,11 @@ router.get(['/active', '/merchant/active'], async (req, res, next) => {
         id: item.id,
         merchant_name: item.merchant_name,
         product_name: item.product_name,
-        amount: parseFloat(item.amount),
+        amount: parseFloat(item.amount || 0),
+        fee_rate: parseFloat(item.fee_rate || 0.8),
+        max_limit: parseFloat(item.max_limit || 10000),
+        min_limit: parseFloat(item.min_limit || 1),
+        channel_desc: item.channel_desc || '',
         qr_content: item.qr_content,
         qr_image_url: imageUrl,
         is_active: item.is_active,
@@ -157,12 +161,12 @@ router.get(['/active', '/merchant/active'], async (req, res, next) => {
 
 /**
  * GET /api/merchant/qrcodes 或 /api/qrcode/merchant/qrcodes
- * 获取所有商家收款码列表（用于测试、展示与扫码演示）
+ * 获取所有商家收款码列表（用于前台自由切换通道与测试）
  */
 router.get(['/qrcodes', '/merchant/qrcodes'], async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT id, merchant_name, product_name, amount, qr_content, qr_image_url, is_active, created_at 
+      `SELECT id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at 
        FROM merchant_qrcodes 
        WHERE is_active = true 
        ORDER BY id ASC`
@@ -173,7 +177,7 @@ router.get(['/qrcodes', '/merchant/qrcodes'], async (req, res, next) => {
       let imageUrl = item.qr_image_url;
       if (!imageUrl) {
         imageUrl = await QRCode.toDataURL(item.qr_content, {
-          width: 280,
+          width: 320,
           margin: 1
         });
       }
@@ -181,9 +185,14 @@ router.get(['/qrcodes', '/merchant/qrcodes'], async (req, res, next) => {
         id: item.id,
         merchant_name: item.merchant_name,
         product_name: item.product_name,
-        amount: parseFloat(item.amount),
+        amount: parseFloat(item.amount || 0),
+        fee_rate: parseFloat(item.fee_rate || 0.8),
+        max_limit: parseFloat(item.max_limit || 10000),
+        min_limit: parseFloat(item.min_limit || 1),
+        channel_desc: item.channel_desc || '',
         qr_content: item.qr_content,
         qr_image_url: imageUrl,
+        is_active: item.is_active,
         created_at: item.created_at
       };
     }));

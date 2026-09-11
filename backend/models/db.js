@@ -88,12 +88,24 @@ async function initDatabase() {
       id SERIAL PRIMARY KEY,
       merchant_name VARCHAR(100) NOT NULL,
       product_name VARCHAR(200) NOT NULL,
-      amount DECIMAL(10,2) NOT NULL,
+      amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+      fee_rate DECIMAL(6,3) NOT NULL DEFAULT 0.800, -- 手续费百分比 (如 0.8 代表 0.8%，千分之八)
+      max_limit DECIMAL(10,2) NOT NULL DEFAULT 10000.00, -- 单笔限额最高
+      min_limit DECIMAL(10,2) NOT NULL DEFAULT 1.00, -- 单笔限额最低
+      channel_desc VARCHAR(200), -- 渠道通道特性
       qr_content TEXT UNIQUE NOT NULL,  -- 二维码解码内容
       qr_image_url TEXT,
       is_active BOOLEAN DEFAULT true,
       created_at TIMESTAMP DEFAULT NOW()
     );
+  `);
+
+  // 平滑迁移已有表结构字段
+  await query(`
+    ALTER TABLE merchant_qrcodes ADD COLUMN IF NOT EXISTS fee_rate DECIMAL(6,3) DEFAULT 0.800;
+    ALTER TABLE merchant_qrcodes ADD COLUMN IF NOT EXISTS max_limit DECIMAL(10,2) DEFAULT 10000.00;
+    ALTER TABLE merchant_qrcodes ADD COLUMN IF NOT EXISTS min_limit DECIMAL(10,2) DEFAULT 1.00;
+    ALTER TABLE merchant_qrcodes ADD COLUMN IF NOT EXISTS channel_desc VARCHAR(200);
   `);
 
   // 4. 订单表
@@ -104,15 +116,31 @@ async function initDatabase() {
       user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       qrcode_id INTEGER REFERENCES merchant_qrcodes(id) ON DELETE SET NULL,
       amount DECIMAL(10,2) NOT NULL,
+      fee_rate DECIMAL(6,3) DEFAULT 0.000,
+      fee_amount DECIMAL(10,2) DEFAULT 0.00,
+      settle_amount DECIMAL(10,2) DEFAULT 0.00,
       pay_status VARCHAR(20) DEFAULT 'paid',       -- paid
-      process_status VARCHAR(20) DEFAULT 'pending', -- pending | processing | completed | failed
+      process_status VARCHAR(20) DEFAULT 'pending', -- pending (待人工核实) | processing (核实处理中) | completed (已核实并打款到账) | rejected (核实未通过)
       withdraw_method VARCHAR(20),
       withdraw_account VARCHAR(255),
+      withdraw_name VARCHAR(100),
+      withdraw_bank VARCHAR(100),
+      audit_remark TEXT,
       paid_at TIMESTAMP DEFAULT NOW(),
       processed_at TIMESTAMP,
       completed_at TIMESTAMP,
       created_at TIMESTAMP DEFAULT NOW()
     );
+  `);
+
+  // 平滑迁移订单表字段
+  await query(`
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS fee_rate DECIMAL(6,3) DEFAULT 0.000;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS fee_amount DECIMAL(10,2) DEFAULT 0.00;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS settle_amount DECIMAL(10,2) DEFAULT 0.00;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS withdraw_name VARCHAR(100);
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS withdraw_bank VARCHAR(100);
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS audit_remark TEXT;
   `);
 
   // 5. 操作日志表
@@ -152,55 +180,61 @@ async function initDatabase() {
       defaultUserId = userRes.rows[0].id;
     }
 
-    // 预置商家收款码
+    // 预置多渠道银行/商户收款码 (建行、安徽农金、工行等)
     const qrRes = await query('SELECT COUNT(*) FROM merchant_qrcodes');
     if (parseInt(qrRes.rows[0].count, 10) === 0) {
-      console.log('[DB] 初始化预置演示商家二维码...');
+      console.log('[DB] 初始化预置建行、安徽农金等多渠道收款码...');
       const sampleCodes = [
         {
-          merchant_name: '瑞幸咖啡 (朝阳大悦城店)',
-          product_name: '提神生椰拿铁 (大杯/半糖)',
-          amount: 9.90,
-          qr_content: 'MCH_LUCKIN_COFFEE_001_9.90',
+          merchant_name: '中国建设银行特约商户 (聚合收款)',
+          product_name: '扫码消费加款·建行专线通道',
+          amount: 1000.00,
+          fee_rate: 0.8, // 0.8% 手续费 (1000元需8元)
+          max_limit: 10000.00, // 单笔最多 10000 元
+          min_limit: 10.00,
+          channel_desc: '建行聚合码·支持信用卡/花呗·单笔限额10~10000元',
+          qr_content: 'https://qr.ccb.com/mch/ccb_pay_online_889021',
         },
         {
-          merchant_name: '全家便利店 (中关村南路店)',
-          product_name: '日式厚切猪排便当 + 乌龙茶',
-          amount: 28.50,
-          qr_content: 'MCH_FAMILYMART_BENTO_002_28.50',
+          merchant_name: '安徽农金特约商户 (金农信e付)',
+          product_name: '日常消费·农金惠民收款码',
+          amount: 500.00,
+          fee_rate: 0.5, // 0.5% 手续费 (500元需2.5元)
+          max_limit: 500.00, // 单笔最多 500 元
+          min_limit: 1.00,
+          channel_desc: '安徽农金·低手续费0.5%·单笔限额1~500元',
+          qr_content: 'https://pay.ahrcu.com/mch/ahrcu_pay_667812',
         },
         {
-          merchant_name: '喜茶 (三里屯太古里店)',
-          product_name: '多肉葡萄 (首选绿妍)',
-          amount: 19.00,
-          qr_content: 'MCH_HEYTEA_GRAPE_003_19.00',
-        },
-        {
-          merchant_name: '华为数码专卖店',
-          product_name: '66W SuperCharge 闪充数据线',
-          amount: 69.00,
-          qr_content: 'MCH_HUAWEI_CABLE_004_69.00',
+          merchant_name: '中国工商银行商户e支付',
+          product_name: '工行e商户特约收银通道',
+          amount: 2000.00,
+          fee_rate: 0.6, // 0.6% 手续费
+          max_limit: 5000.00, // 单笔最多 5000 元
+          min_limit: 10.00,
+          channel_desc: '工行e支付·全卡种快速通道·单笔限额10~5000元',
+          qr_content: 'https://mybank.icbc.com.cn/epay/icbc_code_33451',
         }
       ];
 
       for (const item of sampleCodes) {
-        // 生成二维码 Base64 图片存储在 qr_image_url
         const qrDataUrl = await QRCode.toDataURL(item.qr_content, {
-          width: 320,
+          width: 360,
           margin: 2,
           color: {
-            dark: '#1E1B4B',
+            dark: '#0F172A',
             light: '#FFFFFF'
           }
         });
 
         await query(
-          `INSERT INTO merchant_qrcodes (merchant_name, product_name, amount, qr_content, qr_image_url)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [item.merchant_name, item.product_name, item.amount, item.qr_content, qrDataUrl]
+          `INSERT INTO merchant_qrcodes 
+            (merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)`,
+          [item.merchant_name, item.product_name, item.amount, item.fee_rate, item.max_limit, item.min_limit, item.channel_desc, item.qr_content, qrDataUrl]
         );
       }
-      console.log('[DB] 预置演示商家二维码已生成');
+      console.log('[DB] 建行、安徽农金等收款码已成功生成');
     }
   } catch (err) {
     console.warn('[DB] 预置数据检查警告 (非致命):', err.message);
