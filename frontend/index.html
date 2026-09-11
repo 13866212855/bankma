@@ -182,34 +182,6 @@
       border-color: var(--primary-color);
       background-color: var(--primary-light);
     }
-
-    /* 核心二维码取景框与图片：保持纯原生触摸识别体验，严禁任何拦截 */
-    .clean-qr-frame {
-      position: relative;
-      width: 220px;
-      height: 220px;
-      background: #FFFFFF;
-      border: 2px solid #E2E8F0;
-      border-radius: 14px;
-      padding: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-      -webkit-touch-callout: default !important;
-      -webkit-user-select: auto !important;
-      user-select: auto !important;
-    }
-    .clean-qr-img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      display: block;
-      -webkit-touch-callout: default !important;
-      -webkit-user-select: auto !important;
-      user-select: auto !important;
-      pointer-events: auto !important;
-    }
   </style>
 </head>
 <body>
@@ -249,33 +221,23 @@
       </div>
 
       <!-- 核心二维码展示主卡片 -->
-      <div class="clean-qr-card" id="main-qr-box">
-        <!-- 核心二维码高质图片展示区 (原生呈现，支持微信长按识别及浏览器保存) -->
+      <div class="clean-qr-card" id="main-qr-box" style="margin-bottom: 0;">
+        <!-- 核心二维码高质图片展示区 (专为手机长按识别优化) -->
         <div class="clean-qr-frame" id="qr-frame-box">
           <img id="main-qr-img" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%23999'>加载中</text></svg>" alt="商户收款二维码" class="clean-qr-img">
         </div>
 
         <!-- 长按识别操作指引标签 -->
-        <div class="clean-qr-badge" id="qr-action-badge" style="margin-top: 14px; background: #EEF2FF; border-color: #C7D2FE; color: var(--primary-color); font-weight: 600;">
+        <div class="clean-qr-badge" style="margin-top: 14px; background: #EEF2FF; border-color: #C7D2FE; color: var(--primary-color); font-weight: 600;">
           <span>👆 长按上方二维码识别，进入微信/银行支付</span>
         </div>
 
-        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px; line-height: 1.5; text-align: center;">
-          微信内长按可直接「识别图中二维码」付款；若在 iPhone/Safari 浏览器中，可点击下方保存二维码或长按选择「存储到“照片”」在微信扫一扫中付款
-        </div>
-
-        <!-- 快捷操作按钮组：保存图片到手机 / 打开支付直链 -->
-        <div style="display: flex; gap: 8px; width: 100%; margin-top: 12px;">
-          <button type="button" id="btn-save-qr" onclick="saveQRCodeImage()" style="flex: 1; height: 38px; border-radius: 8px; border: 1px solid #C7D2FE; background: #F8FAFC; color: var(--primary-color); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
-            <span>📥 保存二维码到相册</span>
-          </button>
-          <button type="button" id="btn-direct-pay" onclick="openPaymentLink()" style="flex: 1; height: 38px; border-radius: 8px; border: 1px solid #10B981; background: #ECFDF5; color: #059669; font-size: 12px; font-weight: 600; display: none; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
-            <span>🔗 直接打开支付链接</span>
-          </button>
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">
+          长按识别后，在微信中输入您想要支付的金额并完成付款
         </div>
 
         <!-- 切换其他二维码快捷触发行 -->
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border-color); font-size: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-color); font-size: 12px;">
           <span style="color: var(--text-muted);">当前通道受限或无法识别？</span>
           <button type="button" id="btn-inline-switch" style="background: none; border: none; color: var(--primary-color); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
             <span>🔄 切换其他二维码</span>
@@ -284,15 +246,12 @@
         </div>
       </div>
 
-      <!-- 金额输入与实时费率/到账计算卡片 (始终正常显示，确保提现流程顺畅) -->
-      <div class="amount-input-card" id="amount-section-card">
+      <!-- 金额输入与实时费率/到账计算卡片 -->
+      <div class="amount-input-card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="background: #EEF2FF; color: var(--primary-color); font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px;">步骤 2</span>
-            <label style="font-size: 13px; font-weight: 700; color: var(--text-main);">
-              输入您扫码支付的金额
-            </label>
-          </div>
+          <label style="font-size: 13px; font-weight: 700; color: var(--text-main);">
+            输入您扫码支付的金额
+          </label>
           <span id="limit-hint-text" style="font-size: 11px; color: var(--text-muted);">
             单笔限额 10 ~ 10000 元
           </span>
@@ -502,39 +461,6 @@
     let selectedMethod = 'wechat';
     let currentPrefs = null;
 
-    // 保存二维码图片到本地/相册
-    function saveQRCodeImage() {
-      if (!activeQrData || !activeQrData.qr_image_url) {
-        Toast.warning('收款码尚未加载');
-        return;
-      }
-      try {
-        const link = document.createElement('a');
-        link.href = activeQrData.qr_image_url;
-        link.download = (activeQrData.merchant_name || '商户收款二维码') + '.jpg';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        Toast.success('已发起下载！若在 iPhone Safari 中，也可直接长按上方二维码选择“存储到照片”');
-      } catch (e) {
-        Toast.info('请直接长按上方二维码图片，在系统菜单中选择“存储到照片”');
-      }
-    }
-
-    // 直接打开支付链接（如果支持直链）
-    function openPaymentLink() {
-      if (!activeQrData || !activeQrData.qr_content) {
-        Toast.warning('当前收款码无直连链接');
-        return;
-      }
-      const content = activeQrData.qr_content.trim();
-      if (content.startsWith('http://') || content.startsWith('https://') || content.startsWith('weixin://') || content.startsWith('alipays://')) {
-        window.location.href = content;
-      } else {
-        Toast.info('该收款码为聚合立牌码，请用微信长按识别或扫一扫付款');
-      }
-    }
-
     // 1. 加载所有可用收款码
     async function loadQRCodes() {
       try {
@@ -577,16 +503,6 @@
 
       if (item.qr_image_url) {
         document.getElementById('main-qr-img').src = item.qr_image_url;
-      }
-
-      // 若包含直连支付链接，展示“直接打开支付链接”快捷按钮
-      const btnDirect = document.getElementById('btn-direct-pay');
-      if (btnDirect) {
-        if (item.qr_content && (item.qr_content.startsWith('http://') || item.qr_content.startsWith('https://') || item.qr_content.startsWith('weixin://') || item.qr_content.startsWith('alipays://'))) {
-          btnDirect.style.display = 'flex';
-        } else {
-          btnDirect.style.display = 'none';
-        }
       }
 
       calculateAmounts();
