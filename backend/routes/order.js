@@ -8,6 +8,7 @@ const router = express.Router();
 const { query } = require('../models/db');
 const { decrypt, maskAccount, encrypt } = require('../utils/crypto');
 const { sendWithdrawNotification } = require('../utils/notify');
+const { sendOrderPaymentEmail } = require('../utils/email');
 
 /**
  * 生成订单编号 (ORD + 年月日时分秒 + 4位随机数)
@@ -142,6 +143,28 @@ router.post('/create', async (req, res, next) => {
        VALUES ($1, 'pending', $2, NOW())`,
       [newOrder.id, `用户发起【到账核实请求】(支付本金: ¥${numAmount.toFixed(2)}, 费率: ${feeRate}%, 手续费: ¥${feeAmount.toFixed(2)}, 预计到账: ¥${settleAmount.toFixed(2)})，等待后台管理员核查账单流水并打款`]
     );
+
+    // mynotice 邮件实时详单协同通知 (异步投递至 527194933@qq.com)
+    (async () => {
+      try {
+        await sendOrderPaymentEmail({
+          ...newOrder,
+          amount: numAmount,
+          fee_rate: feeRate,
+          fee_amount: feeAmount,
+          settle_amount: settleAmount,
+          withdraw_account_plain: withdraw_account,
+          withdraw_name: real_name,
+          withdraw_bank: bank_name,
+          merchant_name: merchantName,
+        }, {
+          systemName: '商户收款与加款核实系统',
+          triggerDesc: '客户提交到账核验与提现申请 · 声信协同自动派发',
+        });
+      } catch (mailErr) {
+        console.warn('[Email Warning] 异步通知邮件发送异常:', mailErr.message);
+      }
+    })();
 
     return res.json({
       code: 200,

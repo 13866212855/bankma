@@ -8,6 +8,7 @@ const router = express.Router();
 const QRCode = require('qrcode');
 const { query } = require('../models/db');
 const { maskAccount, decrypt } = require('../utils/crypto');
+const { sendTestEmail } = require('../utils/email');
 
 // 简单高效的管理端 Token 缓存
 const activeAdminTokens = new Set(['admin_dev_token_secret_123']);
@@ -493,6 +494,40 @@ router.get('/stats', requireAdmin, async (req, res, next) => {
         pending_orders: parseInt(pendingCount.rows[0].count, 10)
       }
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/email/test
+ * 发送测试邮件自检接口 (mynotice 技能)
+ */
+router.post('/email/test', requireAdmin, async (req, res, next) => {
+  try {
+    const { to_email } = req.body || {};
+    const targetEmail = to_email || process.env.NOTIFY_EMAIL_TO || '527194933@qq.com';
+
+    console.log(`[Admin] 管理员触发邮件自检测试，发送至: ${targetEmail}`);
+    const result = await sendTestEmail(targetEmail);
+
+    if (result.success) {
+      return res.json({
+        code: 200,
+        message: `测试邮件已成功发送至 ${targetEmail}！请检查手机 QQ 邮箱或微信邮件提醒。`,
+        data: {
+          target_email: targetEmail,
+          message_id: result.messageId,
+          sent_at: new Date().toISOString()
+        }
+      });
+    } else {
+      return res.status(500).json({
+        code: 500,
+        message: `邮件发送失败: ${result.error}`,
+        data: null
+      });
+    }
   } catch (error) {
     next(error);
   }
