@@ -420,16 +420,35 @@
           </div>
         </div>
 
-        <!-- 银行卡表单 -->
+        <!-- 银行卡表单 (支持多卡记录选择与新卡录入) -->
         <div id="subform-bank" class="method-subform" style="display: none;">
+          <!-- 历史常用银行卡选择面板 (多卡记忆自由选用) -->
+          <div id="saved-bank-cards-box" style="display: none; margin-bottom: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 10px; padding: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 12px; font-weight: 700; color: #1E293B; display: flex; align-items: center; gap: 4px;">
+                <span>💳</span> 常用银行卡记录 (点击选用):
+              </span>
+              <button type="button" id="btn-input-new-card" style="background: none; border: none; color: var(--primary-color); font-size: 11px; font-weight: 600; cursor: pointer; padding: 2px 4px;">
+                + 录入新卡
+              </button>
+            </div>
+            <!-- 卡片列表容器 -->
+            <div id="saved-bank-cards-list" style="display: flex; flex-direction: column; gap: 6px;">
+              <!-- 动态渲染已存银行卡 -->
+            </div>
+          </div>
+
           <div class="form-group" style="margin-bottom: 8px;">
-            <label class="form-label" style="font-size: 12px;">银行储蓄卡卡号 <span style="color: var(--danger-color);">*</span></label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label class="form-label" style="font-size: 12px; margin-bottom: 0;">银行储蓄卡/信用卡卡号 <span style="color: var(--danger-color);">*</span></label>
+              <span id="bank-detect-hint" style="font-size: 10px; color: var(--text-muted);">自动识别开户行</span>
+            </div>
             <input type="text" class="form-input" id="input-confirm-bank-account" placeholder="请输入银行卡号" style="height: 38px; font-size: 13px;">
           </div>
           <div style="display: flex; gap: 8px;">
             <div class="form-group" style="flex: 1;">
               <label class="form-label" style="font-size: 12px;">开户银行名称 <span style="color: var(--danger-color);">*</span></label>
-              <input type="text" class="form-input" id="input-confirm-bank-name" placeholder="如: 工商银行" style="height: 38px; font-size: 13px;">
+              <input type="text" class="form-input" id="input-confirm-bank-name" placeholder="如: 中国工商银行" style="height: 38px; font-size: 13px;">
             </div>
             <div class="form-group" style="flex: 1;">
               <label class="form-label" style="font-size: 12px;">持卡人姓名 <span style="color: var(--danger-color);">*</span></label>
@@ -642,8 +661,138 @@
         document.getElementById('input-confirm-bank-realname').value = currentPrefs.bank.real_name || '';
       }
 
+      renderSavedBankCards();
       updateSelectedMethodDisplay();
     }
+
+    // 渲染已保存的常用银行卡列表 (支持多卡自由选择)
+    function renderSavedBankCards() {
+      const container = document.getElementById('saved-bank-cards-list');
+      const box = document.getElementById('saved-bank-cards-box');
+      if (!container || !box) return;
+
+      const cards = UserPreferenceService.getSavedBankCards();
+      if (!cards || cards.length === 0) {
+        box.style.display = 'none';
+        return;
+      }
+
+      box.style.display = 'block';
+      const curAccount = (document.getElementById('input-confirm-bank-account').value || '').replace(/\s+/g, '');
+
+      container.innerHTML = cards.map(card => {
+        const cleanCardAcc = (card.account || '').replace(/\s+/g, '');
+        const isSelected = cleanCardAcc === curAccount;
+        const tail4 = cleanCardAcc.slice(-4) || cleanCardAcc;
+        return `
+          <div class="saved-card-row" onclick="selectSavedBankCard('${cleanCardAcc}')" style="border: 1.5px solid ${isSelected ? 'var(--primary-color)' : '#E2E8F0'}; background: ${isSelected ? '#EEF2FF' : '#F8FAFC'}; border-radius: 8px; padding: 7px 10px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: all 0.15s ease;">
+            <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+              <span style="font-size: 16px;">🏦</span>
+              <div style="min-width: 0;">
+                <div style="font-size: 12px; font-weight: 700; color: #1E293B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                  ${card.bank_name || '银行卡'} <span style="font-size: 11px; color: #64748B; font-weight: 400;">(${card.real_name || '持卡人'})</span>
+                </div>
+                <div style="font-size: 11px; color: ${isSelected ? '#4338CA' : '#64748B'}; font-family: monospace; font-weight: 600;">
+                  尾号 ${tail4}
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+              <span style="font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 9999px; ${isSelected ? 'background: var(--primary-color); color: #FFF;' : 'background: #E2E8F0; color: #475569;'}">
+                ${isSelected ? '已选用' : '选用'}
+              </span>
+              <button type="button" onclick="event.stopPropagation(); deleteSavedBankCard('${cleanCardAcc}')" style="background: none; border: none; color: #94A3B8; font-size: 15px; cursor: pointer; padding: 2px 6px; line-height: 1;" title="删除此记录">&times;</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 选中某张已存银行卡
+    window.selectSavedBankCard = function(account) {
+      const cards = UserPreferenceService.getSavedBankCards();
+      const target = cards.find(c => (c.account || '').replace(/\s+/g, '') === account);
+      if (target) {
+        document.getElementById('input-confirm-bank-account').value = target.account;
+        document.getElementById('input-confirm-bank-name').value = target.bank_name;
+        document.getElementById('input-confirm-bank-realname').value = target.real_name;
+        renderSavedBankCards();
+        updateSelectedMethodDisplay();
+        Toast.success(`已选用 ${target.bank_name} (尾号${target.account.slice(-4)})`);
+      }
+    };
+
+    // 删除某张已存银行卡
+    window.deleteSavedBankCard = function(account) {
+      UserPreferenceService.deleteBankCard(account);
+      const cards = UserPreferenceService.getSavedBankCards();
+      const curAccount = (document.getElementById('input-confirm-bank-account').value || '').replace(/\s+/g, '');
+      if (curAccount === account) {
+        if (cards.length > 0) {
+          selectSavedBankCard((cards[0].account || '').replace(/\s+/g, ''));
+        } else {
+          document.getElementById('input-confirm-bank-account').value = '';
+          document.getElementById('input-confirm-bank-name').value = '';
+          renderSavedBankCards();
+          updateSelectedMethodDisplay();
+        }
+      } else {
+        renderSavedBankCards();
+      }
+      Toast.info('已移除该银行卡记录');
+    };
+
+    // 常用银行卡号 BIN 智能匹配表
+    const COMMON_BIN_MAP = [
+      { prefix: '622202', name: '中国工商银行' },
+      { prefix: '621226', name: '中国工商银行' },
+      { prefix: '622200', name: '中国工商银行' },
+      { prefix: '621700', name: '中国建设银行' },
+      { prefix: '622700', name: '中国建设银行' },
+      { prefix: '622848', name: '中国农业银行' },
+      { prefix: '622846', name: '中国农业银行' },
+      { prefix: '621483', name: '招商银行' },
+      { prefix: '622588', name: '招商银行' },
+      { prefix: '621661', name: '中国银行' },
+      { prefix: '621660', name: '中国银行' },
+      { prefix: '621098', name: '中国邮政储蓄银行' },
+      { prefix: '622188', name: '中国邮政储蓄银行' },
+      { prefix: '622260', name: '交通银行' },
+      { prefix: '622609', name: '中信银行' },
+      { prefix: '622622', name: '民生银行' },
+      { prefix: '622908', name: '兴业银行' },
+      { prefix: '622538', name: '光大银行' },
+      { prefix: '622770', name: '广发银行' },
+      { prefix: '622810', name: '平安银行' }
+    ];
+
+    // 录入新卡操作绑定
+    document.getElementById('btn-input-new-card').addEventListener('click', () => {
+      document.getElementById('input-confirm-bank-account').value = '';
+      document.getElementById('input-confirm-bank-name').value = '';
+      renderSavedBankCards();
+      updateSelectedMethodDisplay();
+      document.getElementById('input-confirm-bank-account').focus();
+      Toast.info('请在下方填写新银行卡信息，提交后自动保存');
+    });
+
+    // 银行卡输入自动识别开户行并同步选中态
+    document.getElementById('input-confirm-bank-account').addEventListener('input', (e) => {
+      const val = e.target.value.replace(/\s+/g, '');
+      const bankNameInput = document.getElementById('input-confirm-bank-name');
+      const hint = document.getElementById('bank-detect-hint');
+      if (val.length >= 6) {
+        const matched = COMMON_BIN_MAP.find(b => val.startsWith(b.prefix));
+        if (matched) {
+          if (!bankNameInput.value || bankNameInput.dataset.autoFilled === 'true') {
+            bankNameInput.value = matched.name;
+            bankNameInput.dataset.autoFilled = 'true';
+          }
+          if (hint) hint.innerHTML = `<span style="color: #059669; font-weight: 600;">已识别: ${matched.name}</span>`;
+        }
+      }
+      renderSavedBankCards();
+    });
 
     // 更新提现到账方式显示
     function updateSelectedMethodDisplay() {
@@ -794,7 +943,7 @@
         } else if (selectedMethod === 'alipay') {
           UserPreferenceService.saveAccountDetails('alipay', { account: withdrawAccount, real_name: withdrawName });
         } else if (selectedMethod === 'bank') {
-          UserPreferenceService.saveAccountDetails('bank', { account: withdrawAccount, bank_name: withdrawBank, real_name: withdrawName });
+          UserPreferenceService.saveBankCard({ account: withdrawAccount, bank_name: withdrawBank, real_name: withdrawName });
         }
       }
 

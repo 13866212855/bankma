@@ -296,6 +296,7 @@
           real_name: realName,
           is_default: isDefault
         });
+        UserPreferenceService.saveBankCard({ account, bank_name: bankName, real_name: realName });
         Loading.hide();
         Toast.success('银行卡收款方式保存成功！');
         loadConfigs();

@@ -338,21 +338,17 @@
           <div style="font-size: 11px; color: var(--text-muted); font-family: monospace;" id="poll-indicator">已就绪</div>
         </div>
 
-        <!-- 微信与手机后台运行保活高亮条 -->
-        <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 20px;">📱</span>
-            <div>
-              <div style="font-size: 12px; font-weight: 700; color: #166534;" id="keepalive-status-text">
-                后台保活运行模式: <span style="color: #059669;">🟢 已激活 (切到微信持续发声)</span>
-              </div>
-              <div style="font-size: 11px; color: #15803D;">
-                切到微信聊天、切换其它App或锁屏时，只要手机浏览器保留此后台页面，新订单仍会自动语音发声！
-              </div>
-            </div>
+        <!-- 微信与手机后台运行保活微型条 (标题精简为4字符：后台保活) -->
+        <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; padding: 6px 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 15px;">📱</span>
+            <span style="font-size: 13px; font-weight: 700; color: #166534;">后台保活</span>
+            <span id="keepalive-status-badge" style="font-size: 11px; font-weight: 700; color: #059669; background: #DCFCE7; padding: 1px 8px; border-radius: 9999px;">
+              🟢 已开
+            </span>
           </div>
-          <button type="button" id="btn-activate-keepalive" class="btn btn-sm" style="background: #059669; color: #FFF; border: none; font-size: 11px; height: 28px; padding: 0 10px; font-weight: 600; white-space: nowrap; border-radius: 6px; flex-shrink: 0;">
-            ⚡ 激活微信保活
+          <button type="button" id="btn-activate-keepalive" class="btn btn-sm" style="background: #059669; color: #FFF; border: none; font-size: 11px; height: 24px; padding: 0 10px; font-weight: 600; border-radius: 6px;">
+            激活
           </button>
         </div>
 
@@ -573,13 +569,17 @@
     }
 
     function updateKeepaliveUI() {
-      const el = document.getElementById('keepalive-status-text');
-      if (!el) return;
+      const badge = document.getElementById('keepalive-status-badge');
+      if (!badge) return;
       const ready = window.MyNoticeSound && window.MyNoticeSound.isAudioReady();
       if (ready) {
-        el.innerHTML = '后台保活运行模式: <span style="color: #059669;">🟢 已激活 (切到微信持续发声)</span>';
+        badge.innerHTML = '🟢 已开';
+        badge.style.color = '#059669';
+        badge.style.background = '#DCFCE7';
       } else {
-        el.innerHTML = '后台保活运行模式: <span style="color: #D97706;">⚡ 轻触激活 (开启微信后台持续播报)</span>';
+        badge.innerHTML = '⚪ 未开';
+        badge.style.color = '#D97706';
+        badge.style.background = '#FEF3C7';
       }
     }
 

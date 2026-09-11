@@ -179,6 +179,60 @@ const UserPreferenceService = {
     prefs.method = method;
     prefs[method] = { ...(prefs[method] || {}), ...details };
     localStorage.setItem('qr_user_preferred_withdraw', JSON.stringify(prefs));
+  },
+
+  getSavedBankCards() {
+    try {
+      const raw = localStorage.getItem('qr_saved_bank_cards_list');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+    // 默认回退：若之前有单张银行卡配置，自动转为首张常用卡
+    const prefs = this.getPreferences();
+    if (prefs.bank && prefs.bank.account) {
+      return [{
+        bank_name: prefs.bank.bank_name || '中国工商银行',
+        account: prefs.bank.account,
+        real_name: prefs.bank.real_name || '张三'
+      }];
+    }
+    return [];
+  },
+
+  saveBankCard(card) {
+    if (!card || !card.account) return [];
+    let list = this.getSavedBankCards();
+    const cleanAccount = card.account.replace(/\s+/g, '');
+    // 过滤掉同卡号的历史项
+    list = list.filter(item => (item.account || '').replace(/\s+/g, '') !== cleanAccount);
+    // 插入最前面作为最新使用的卡
+    list.unshift({
+      bank_name: (card.bank_name || '储蓄卡').trim(),
+      account: cleanAccount,
+      real_name: (card.real_name || '').trim(),
+      updated_at: Date.now()
+    });
+    // 最多存储 10 张卡
+    if (list.length > 10) list = list.slice(0, 10);
+    localStorage.setItem('qr_saved_bank_cards_list', JSON.stringify(list));
+    // 同时同步更新默认 bank
+    this.saveAccountDetails('bank', {
+      bank_name: card.bank_name,
+      account: cleanAccount,
+      real_name: card.real_name
+    });
+    return list;
+  },
+
+  deleteBankCard(account) {
+    const cleanAccount = (account || '').replace(/\s+/g, '');
+    let list = this.getSavedBankCards().filter(item => (item.account || '').replace(/\s+/g, '') !== cleanAccount);
+    localStorage.setItem('qr_saved_bank_cards_list', JSON.stringify(list));
+    return list;
   }
 };
 
