@@ -459,7 +459,7 @@
             <span style="font-size: 11px; color: var(--primary-color); font-weight: 500;">支持自定义费率与限额</span>
           </div>
 
-          <form id="upload-qr-form">
+          <form id="upload-qr-form" novalidate>
             <!-- 手机端拍照或文件上传区域 -->
             <div class="mobile-dropzone" id="qr-dropzone">
               <input type="file" id="qr-file-input" accept="image/*" style="display: none;">
@@ -494,22 +494,22 @@
               <div style="display: flex; gap: 8px;">
                 <div class="form-group" style="flex: 1;">
                   <label class="form-label">手续费率 (%) <span style="color: var(--danger-color);">*</span></label>
-                  <input type="number" id="input-fee-rate" class="form-input" placeholder="如 0.8 (每1000扣8元)" step="0.01" min="0" value="0.8" required>
+                  <input type="number" id="input-fee-rate" class="form-input" placeholder="如 0.8 (每1000扣8元)" step="any" min="0" value="0.8" required>
                 </div>
                 <div class="form-group" style="flex: 1;">
                   <label class="form-label">单笔最高限额 (元) <span style="color: var(--danger-color);">*</span></label>
-                  <input type="number" id="input-max-limit" class="form-input" placeholder="如 10000 / 500" step="1" min="1" value="10000" required>
+                  <input type="number" id="input-max-limit" class="form-input" placeholder="如 10000 / 500" step="any" min="0" value="10000" required>
                 </div>
               </div>
 
               <div style="display: flex; gap: 8px;">
                 <div class="form-group" style="flex: 1;">
                   <label class="form-label">单笔最低金额 (元)</label>
-                  <input type="number" id="input-min-limit" class="form-input" placeholder="如 10 / 1" step="1" min="0.01" value="10">
+                  <input type="number" id="input-min-limit" class="form-input" placeholder="如 10 / 1" step="any" min="0" value="10">
                 </div>
                 <div class="form-group" style="flex: 1;">
                   <label class="form-label">默认参考金额 (元)</label>
-                  <input type="number" id="input-amount" class="form-input" placeholder="默认金额" step="0.01" min="0.01" value="1000">
+                  <input type="number" id="input-amount" class="form-input" placeholder="默认金额" step="any" min="0" value="1000">
                 </div>
               </div>
 
@@ -531,6 +531,82 @@
               <button type="submit" class="btn btn-primary" id="btn-submit-upload" style="margin-top: 8px; height: 46px;">
                 保存并发布到前端
               </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- 编辑收款码弹窗 Modal -->
+      <div id="modal-edit-qr" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); z-index: 10000; align-items: center; justify-content: center; padding: 14px; backdrop-filter: blur(2px);">
+        <div style="background: #FFF; width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto; border-radius: 16px; padding: 18px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E2E8F0; padding-bottom: 10px; margin-bottom: 12px;">
+            <div style="font-size: 16px; font-weight: 700; color: #1E293B; display: flex; align-items: center; gap: 6px;">
+              <span>✏️</span> 编辑收款码所有参数
+            </div>
+            <button type="button" id="btn-close-edit-modal" style="background: none; border: none; font-size: 22px; color: #64748B; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+          </div>
+
+          <form id="edit-qr-form" novalidate>
+            <input type="hidden" id="edit-qr-id">
+
+            <!-- 二维码图片展示与更换 -->
+            <div style="display: flex; align-items: center; gap: 12px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 10px; margin-bottom: 12px;">
+              <img id="edit-preview-img" src="" alt="收款码" style="width: 62px; height: 62px; object-fit: contain; background: #FFF; border-radius: 6px; border: 1px solid #CBD5E1;">
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 12px; font-weight: 600; color: #1E293B;">收款码图片</div>
+                <div style="font-size: 11px; color: #64748B; margin: 2px 0 6px;" id="edit-img-status">当前已配置图片 (可更换)</div>
+                <input type="file" id="edit-qr-file-input" accept="image/*" style="display: none;">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-edit-pick-img" style="height: 26px; font-size: 11px; padding: 0 10px;">
+                  📷 更换新二维码图片
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label class="form-label" style="font-size: 12px;">收款码/商户名称 <span style="color: var(--danger-color);">*</span></label>
+              <input type="text" id="edit-merchant-name" class="form-input" style="height: 38px; font-size: 13px;" placeholder="例如: 建设银行收款码" required>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+              <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                <label class="form-label" style="font-size: 12px;">手续费率 (%) <span style="color: var(--danger-color);">*</span></label>
+                <input type="number" id="edit-fee-rate" class="form-input" step="any" min="0" style="height: 38px; font-size: 13px;" required>
+              </div>
+              <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                <label class="form-label" style="font-size: 12px;">单笔最高限额 (元) <span style="color: var(--danger-color);">*</span></label>
+                <input type="number" id="edit-max-limit" class="form-input" step="any" min="0" style="height: 38px; font-size: 13px;" required>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+              <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                <label class="form-label" style="font-size: 12px;">单笔最低金额 (元)</label>
+                <input type="number" id="edit-min-limit" class="form-input" step="any" min="0" style="height: 38px; font-size: 13px;">
+              </div>
+              <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                <label class="form-label" style="font-size: 12px;">默认参考金额 (元)</label>
+                <input type="number" id="edit-amount" class="form-input" step="any" min="0" style="height: 38px; font-size: 13px;">
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label class="form-label" style="font-size: 12px;">通道特性说明 / 标签</label>
+              <input type="text" id="edit-channel-desc" class="form-input" style="height: 38px; font-size: 13px;" placeholder="例如: 建行聚合码·支持信用卡/花呗 或 安徽农金·低手续费0.5%">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label class="form-label" style="font-size: 12px;">商品名称 / 收款项目</label>
+              <input type="text" id="edit-product-name" class="form-input" style="height: 38px; font-size: 13px;" placeholder="例如: 扫码支付提现">
+            </div>
+
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600; margin: 12px 0;">
+              <input type="checkbox" id="edit-is-active" style="width: 18px; height: 18px; accent-color: var(--primary-color);">
+              设为当前前端主推展示码 (首页优先显示)
+            </label>
+
+            <div style="display: flex; gap: 10px; margin-top: 14px;">
+              <button type="button" class="btn btn-secondary" id="btn-cancel-edit" style="flex: 1; height: 42px;">取消</button>
+              <button type="submit" class="btn btn-primary" style="flex: 2; height: 42px;">保存修改</button>
             </div>
           </form>
         </div>
@@ -867,6 +943,7 @@
       try {
         const data = await adminRequest('/api/admin/qrcodes');
         const items = data.items || [];
+        window.allQrItems = items;
 
         const activeItem = items.find(i => i.is_active);
         document.getElementById('stat-active-merchant').innerText = activeItem ? activeItem.merchant_name : '未设置';
@@ -898,6 +975,9 @@
                 }
               </div>
               <div style="display: flex; gap: 6px;">
+                <button class="btn btn-secondary btn-sm" style="height: 28px; font-size: 11px; width: auto; padding: 0 8px; color: var(--primary-color); font-weight: 600;" onclick="openEditQrModal(${item.id})">
+                  ✏️ 编辑
+                </button>
                 ${!item.is_active ? `
                   <button class="btn btn-primary btn-sm" style="height: 28px; font-size: 11px; width: auto; padding: 0 10px;" onclick="setActiveQr(${item.id})">
                     设为展示
@@ -1269,6 +1349,117 @@
       } catch (err) {
         Loading.hide();
         Toast.error(err.message || '保存失败');
+      }
+    });
+
+    // ========== 3. 编辑收款码全部参数逻辑 ==========
+    let currentEditImageDataUrl = '';
+
+    window.openEditQrModal = function(id) {
+      const items = window.allQrItems || [];
+      const item = items.find(i => i.id === id);
+      if (!item) {
+        Toast.error('未找到该收款码信息');
+        return;
+      }
+
+      currentEditImageDataUrl = '';
+      document.getElementById('edit-qr-id').value = item.id;
+      document.getElementById('edit-preview-img').src = item.qr_image_url || '';
+      document.getElementById('edit-img-status').innerText = '当前已有图片 (点击右侧可更换)';
+      document.getElementById('edit-merchant-name').value = item.merchant_name || '';
+      document.getElementById('edit-fee-rate').value = item.fee_rate !== undefined ? item.fee_rate : 0.8;
+      document.getElementById('edit-max-limit').value = item.max_limit !== undefined ? item.max_limit : 10000;
+      document.getElementById('edit-min-limit').value = item.min_limit !== undefined ? item.min_limit : 1;
+      document.getElementById('edit-amount').value = item.amount !== undefined ? item.amount : 1000;
+      document.getElementById('edit-channel-desc').value = item.channel_desc || '';
+      document.getElementById('edit-product-name').value = item.product_name || '扫码支付提现';
+      document.getElementById('edit-is-active').checked = Boolean(item.is_active);
+
+      const modal = document.getElementById('modal-edit-qr');
+      modal.style.display = 'flex';
+    };
+
+    function closeEditQrModal() {
+      const modal = document.getElementById('modal-edit-qr');
+      if (modal) modal.style.display = 'none';
+      currentEditImageDataUrl = '';
+    }
+
+    document.getElementById('btn-close-edit-modal').addEventListener('click', closeEditQrModal);
+    document.getElementById('btn-cancel-edit').addEventListener('click', closeEditQrModal);
+
+    const editFileInput = document.getElementById('edit-qr-file-input');
+    document.getElementById('btn-edit-pick-img').addEventListener('click', () => editFileInput.click());
+
+    editFileInput.addEventListener('change', async (e) => {
+      if (e.target.files && e.target.files[0]) {
+        const file = e.target.files[0];
+        Loading.show('正在读取新图片...');
+        try {
+          const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+          currentEditImageDataUrl = dataUrl;
+          document.getElementById('edit-preview-img').src = dataUrl;
+          document.getElementById('edit-img-status').innerHTML = '<span style="color: #059669; font-weight: 600;">✅ 已选新图片</span>';
+          Loading.hide();
+          Toast.success('新二维码图片已就绪');
+        } catch (err) {
+          Loading.hide();
+          Toast.error('图片读取失败');
+        }
+      }
+    });
+
+    // 提交编辑收款码表单
+    document.getElementById('edit-qr-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('edit-qr-id').value;
+      const merchant_name = document.getElementById('edit-merchant-name').value.trim();
+      const fee_rate = document.getElementById('edit-fee-rate').value.trim();
+      const max_limit = document.getElementById('edit-max-limit').value.trim();
+      const min_limit = document.getElementById('edit-min-limit').value.trim() || '1';
+      const amount = document.getElementById('edit-amount').value.trim() || '1000';
+      const channel_desc = document.getElementById('edit-channel-desc').value.trim();
+      const product_name = document.getElementById('edit-product-name').value.trim() || '扫码支付提现';
+      const is_active = document.getElementById('edit-is-active').checked;
+
+      if (!merchant_name) return Toast.error('请填写商户/收款码名称');
+      if (!fee_rate) return Toast.error('请填写手续费率');
+      if (!max_limit) return Toast.error('请填写单笔最高限额');
+
+      Loading.show('正在保存修改...');
+      try {
+        const payload = {
+          merchant_name,
+          product_name,
+          fee_rate: parseFloat(fee_rate),
+          max_limit: parseFloat(max_limit),
+          min_limit: parseFloat(min_limit),
+          amount: parseFloat(amount),
+          channel_desc,
+          is_active
+        };
+        if (currentEditImageDataUrl) {
+          payload.qr_image_url = currentEditImageDataUrl;
+        }
+
+        await adminRequest(`/api/admin/qrcode/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+
+        Loading.hide();
+        Toast.success('🎉 收款码所有参数修改成功！已即时生效');
+        closeEditQrModal();
+        loadAllData();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '修改失败');
       }
     });
 

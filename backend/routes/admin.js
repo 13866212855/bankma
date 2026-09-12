@@ -229,6 +229,125 @@ router.post('/qrcode', requireAdmin, async (req, res, next) => {
 });
 
 /**
+ * PUT /api/admin/qrcode/:id
+ * 编辑已有收款码的所有参数（商户名称、手续费率、最高最低限额、参考金额、通道描述、商品名称、展示状态、更换图片等）
+ */
+router.put('/qrcode/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ code: 400, message: '无效的二维码 ID' });
+    }
+
+    const {
+      merchant_name,
+      product_name,
+      amount,
+      fee_rate,
+      max_limit,
+      min_limit,
+      channel_desc,
+      qr_image_url,
+      is_active
+    } = req.body;
+
+    if (!merchant_name || !merchant_name.trim()) {
+      return res.status(400).json({ code: 400, message: '商户名称为必填项' });
+    }
+
+    const numAmount = parseFloat(amount !== undefined ? amount : 0);
+    const numFeeRate = parseFloat(fee_rate !== undefined ? fee_rate : 0.8);
+    const numMaxLimit = parseFloat(max_limit !== undefined ? max_limit : 10000);
+    const numMinLimit = parseFloat(min_limit !== undefined ? min_limit : 1);
+
+    if (isNaN(numFeeRate) || numFeeRate < 0) {
+      return res.status(400).json({ code: 400, message: '手续费率必须为大于等于0的数值' });
+    }
+
+    if (isNaN(numMaxLimit) || numMaxLimit <= 0) {
+      return res.status(400).json({ code: 400, message: '单笔最高限额必须大于0' });
+    }
+
+    // 若设为当前主推展示码，先将其余置为 false
+    if (is_active) {
+      await query(`UPDATE merchant_qrcodes SET is_active = false WHERE id != $1`, [id]);
+    }
+
+    let updateQuery;
+    let queryParams;
+
+    if (qr_image_url) {
+      // 换了新图片
+      updateQuery = `
+        UPDATE merchant_qrcodes
+        SET merchant_name = $1,
+            product_name = $2,
+            amount = $3,
+            fee_rate = $4,
+            max_limit = $5,
+            min_limit = $6,
+            channel_desc = $7,
+            qr_image_url = $8,
+            is_active = $9
+        WHERE id = $10
+        RETURNING *
+      `;
+      queryParams = [
+        merchant_name.trim(),
+        (product_name || '扫码加款收款通道').trim(),
+        numAmount,
+        numFeeRate,
+        numMaxLimit,
+        numMinLimit,
+        channel_desc || '',
+        qr_image_url,
+        Boolean(is_active),
+        id
+      ];
+    } else {
+      // 保持原有图片
+      updateQuery = `
+        UPDATE merchant_qrcodes
+        SET merchant_name = $1,
+            product_name = $2,
+            amount = $3,
+            fee_rate = $4,
+            max_limit = $5,
+            min_limit = $6,
+            channel_desc = $7,
+            is_active = $8
+        WHERE id = $9
+        RETURNING *
+      `;
+      queryParams = [
+        merchant_name.trim(),
+        (product_name || '扫码加款收款通道').trim(),
+        numAmount,
+        numFeeRate,
+        numMaxLimit,
+        numMinLimit,
+        channel_desc || '',
+        Boolean(is_active),
+        id
+      ];
+    }
+
+    const updateRes = await query(updateQuery, queryParams);
+    if (updateRes.rows.length === 0) {
+      return res.status(404).json({ code: 404, message: '未找到指定收款码' });
+    }
+
+    return res.json({
+      code: 200,
+      message: '收款码所有参数已成功更新并生效',
+      data: updateRes.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * PUT /api/admin/qrcode/:id/set-active
  * 将指定二维码设为前端展示的主收款码
  */
