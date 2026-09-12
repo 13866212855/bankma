@@ -634,10 +634,11 @@ router.post('/email/test', requireAdmin, async (req, res, next) => {
     if (result.success) {
       return res.json({
         code: 200,
-        message: `测试邮件已成功发送至 ${targetEmail}！请检查手机 QQ 邮箱或微信邮件提醒。`,
+        message: `测试邮件已通过通道 [${result.channelUsed || 'IPv4'}] 成功发送至 ${targetEmail}！请检查手机 QQ 邮箱或微信邮件提醒。`,
         data: {
           target_email: targetEmail,
           message_id: result.messageId,
+          channel_used: result.channelUsed,
           sent_at: new Date().toISOString()
         }
       });

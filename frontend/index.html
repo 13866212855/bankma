@@ -623,20 +623,14 @@
     });
 
     // 绑定切换其他二维码按钮事件
-    document.getElementById('btn-top-switch').addEventListener('click', () => {
+    function openChannelPicker() {
+      renderChannelPickerList();
       document.getElementById('channel-picker-modal').style.display = 'flex';
-    });
-    document.getElementById('btn-card-switch').addEventListener('click', () => {
-      document.getElementById('channel-picker-modal').style.display = 'flex';
-    });
-    document.getElementById('btn-inline-switch').addEventListener('click', () => {
-      // 若只有2个直接快速轮换，若多个则打开抽屉
-      if (allQrcodes.length === 2) {
-        switchToNextQRCode();
-      } else {
-        document.getElementById('channel-picker-modal').style.display = 'flex';
-      }
-    });
+    }
+
+    document.getElementById('btn-top-switch').addEventListener('click', openChannelPicker);
+    document.getElementById('btn-card-switch').addEventListener('click', openChannelPicker);
+    document.getElementById('btn-inline-switch').addEventListener('click', openChannelPicker);
     document.getElementById('btn-close-channel-picker').addEventListener('click', () => {
       document.getElementById('channel-picker-modal').style.display = 'none';
     });

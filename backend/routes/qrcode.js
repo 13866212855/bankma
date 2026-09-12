@@ -168,8 +168,7 @@ router.get(['/qrcodes', '/merchant/qrcodes'], async (req, res, next) => {
     const result = await query(
       `SELECT id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at 
        FROM merchant_qrcodes 
-       WHERE is_active = true 
-       ORDER BY id ASC`
+       ORDER BY is_active DESC, id ASC`
     );
 
     // 若未生成图片则补充生成 DataURL

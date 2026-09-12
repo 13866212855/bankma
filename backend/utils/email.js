@@ -5,37 +5,76 @@
  */
 
 const nodemailer = require('nodemailer');
+const dns = require('dns');
 
-let transporter = null;
+// 强制优先使用 IPv4，防止云服务器/生产环境 (如 Render、Heroku、AWS) 无外网 IPv6 路由时出现 connect ENETUNREACH 错误
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 /**
- * 获取或创建 nodemailer Transporter 单例
+ * 创建针对云生产环境优化的邮件传输对象 (单次连接或连接池)
+ * @param {number} port 端口号 (如 465 或 587)
+ * @param {boolean} secure 是否使用 SSL 直连
  */
-function getTransporter() {
-  if (!transporter) {
-    const host = process.env.SMTP_HOST || 'smtp.qq.com';
-    const port = parseInt(process.env.SMTP_PORT || '465', 10);
-    const secure = process.env.SMTP_SECURE !== 'false';
-    const user = process.env.SMTP_USER || '527194933@qq.com';
-    const pass = process.env.SMTP_PASS || 'rvlehugdnsmccajh';
+function createTransporter(port = 465, secure = true) {
+  const host = process.env.SMTP_HOST || 'smtp.qq.com';
+  const user = process.env.SMTP_USER || '527194933@qq.com';
+  const pass = process.env.SMTP_PASS || 'rvlehugdnsmccajh';
 
-    transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure,
-      auth: {
-        user,
-        pass,
-      },
-      // 优化连接池与超时设置
-      pool: true,
-      maxConnections: 3,
-      connectionTimeout: 10000,
-      greetingTimeout: 8000,
-      socketTimeout: 15000,
-    });
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: {
+      user,
+      pass,
+    },
+    // 强制 IPv4: 避免 Node.js 在 Render 等只有 IPv4 出口的主机上尝试 :: IPv6 导致 ENETUNREACH
+    family: 4,
+    tls: {
+      rejectUnauthorized: false,
+      servername: host,
+    },
+    connectionTimeout: 12000,
+    greetingTimeout: 8000,
+    socketTimeout: 15000,
+  });
+}
+
+/**
+ * 自适应容灾邮件投递函数：
+ * 在生产环境或不同主机上，若 465 (SSL) 端口受阻或不可达，自动无缝切换 587 (STARTTLS) 备选通道
+ * @param {Object} mailOptions 邮件参数
+ */
+async function sendMailWithFallback(mailOptions) {
+  const primaryPort = parseInt(process.env.SMTP_PORT || '465', 10);
+  const primarySecure = process.env.SMTP_SECURE !== 'false' && primaryPort === 465;
+
+  const channels = [
+    { port: primaryPort, secure: primarySecure, name: `${primaryPort} (${primarySecure ? 'SSL' : 'STARTTLS'})` }
+  ];
+
+  if (primaryPort === 465) {
+    channels.push({ port: 587, secure: false, name: '587 (STARTTLS)' });
+  } else {
+    channels.push({ port: 465, secure: true, name: '465 (SSL)' });
   }
-  return transporter;
+
+  let lastError = null;
+  for (const ch of channels) {
+    try {
+      const transporter = createTransporter(ch.port, ch.secure);
+      const info = await transporter.sendMail(mailOptions);
+      console.log(`[Email] 邮件已通过通道 ${ch.name} 成功发送, MessageID: ${info.messageId}`);
+      return { success: true, messageId: info.messageId, channelUsed: ch.name };
+    } catch (err) {
+      console.warn(`[Email Warn] 通道 ${ch.name} 发送失败: ${err.message}`);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('所有邮件发送通道均无法连接');
 }
 
 /**
@@ -190,16 +229,15 @@ async function sendOrderPaymentEmail(order, options = {}) {
 </html>
     `;
 
-    const transport = getTransporter();
-    const info = await transport.sendMail({
+    const sendResult = await sendMailWithFallback({
       from: `"${systemName}" <${fromUser}>`,
       to: targetEmail,
       subject,
       html,
     });
 
-    console.log(`[Email] 扫码核实详单邮件已成功发送至 ${targetEmail}, MessageID: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
+    console.log(`[Email] 扫码核实详单邮件已成功发送至 ${targetEmail} (通道: ${sendResult.channelUsed}), MessageID: ${sendResult.messageId}`);
+    return { success: true, messageId: sendResult.messageId, channelUsed: sendResult.channelUsed };
   } catch (error) {
     console.error('[Email Error] 发送详单邮件失败:', error.message);
     return { success: false, error: error.message };
@@ -235,7 +273,9 @@ async function sendTestEmail(toEmail) {
 }
 
 module.exports = {
-  getTransporter,
+  createTransporter,
+  getTransporter: createTransporter,
+  sendMailWithFallback,
   sendOrderPaymentEmail,
   sendTestEmail,
   formatBeijingTime,

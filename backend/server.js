@@ -7,6 +7,12 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const dotenv = require('dotenv');
+const dns = require('dns');
+
+// 强制全局优先使用 IPv4，彻底杜绝 Render、Heroku、AWS 等云生产环境无 IPv6 路由引发的 connect ENETUNREACH 错误
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 // 加载环境变量
 dotenv.config();
