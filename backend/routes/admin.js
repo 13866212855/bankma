@@ -6,40 +6,90 @@
 const express = require('express');
 const router = express.Router();
 const QRCode = require('qrcode');
-const { query } = require('../models/db');
+const crypto = require('crypto');
+const { query, hashAdminPassword, verifyAdminPassword } = require('../models/db');
 const { maskAccount, decrypt } = require('../utils/crypto');
 const { sendTestEmail } = require('../utils/email');
 const { generateTTSAudio } = require('../utils/tts');
 const { getAllTenants, getTenantById, invalidateTenantCache } = require('../utils/tenant');
 
-// 简单高效的管理端 Token 缓存
-const activeAdminTokens = new Set(['admin_dev_token_secret_123']);
+// 管理端会话 Session 缓存 (映射 Token -> 用户信息，支持多租户与角色隔离)
+const activeAdminSessions = new Map([
+  ['admin_dev_token_secret_123', {
+    id: 0,
+    username: 'admin',
+    tenant_id: 'default',
+    role: 'superadmin',
+    login_time: new Date().toISOString()
+  }]
+]);
 
 /**
- * 校验管理端 Token 中间件
+ * 校验管理端 Token 中间件 (支持超级总台管理员与各子租户管理员)
  */
 function requireAdmin(req, res, next) {
   const authHeader = req.headers.authorization;
   const queryToken = req.query.token;
   const token = (authHeader && authHeader.replace(/^Bearer\s+/, '')) || queryToken;
 
-  if (!token || !activeAdminTokens.has(token)) {
+  if (!token) {
     return res.status(401).json({
       code: 401,
       message: '管理员未登录或登录凭证已过期，请重新登录',
       data: null
     });
   }
+
+  let session = activeAdminSessions.get(token);
+  if (!session) {
+    // 兼容历史硬编码 dev token
+    if (token === 'admin_dev_token_secret_123') {
+      session = {
+        id: 0,
+        username: 'admin',
+        tenant_id: 'default',
+        role: 'superadmin',
+        login_time: new Date().toISOString()
+      };
+      activeAdminSessions.set(token, session);
+    } else {
+      return res.status(401).json({
+        code: 401,
+        message: '管理员会话已失效，请重新登录',
+        data: null
+      });
+    }
+  }
+
+  req.adminUser = session;
   next();
 }
 
 /**
+ * 仅限超级管理员 (总台 default) 的权限校验中间件
+ * 注意：子租户后台并无删除订单等超管权限！
+ */
+function requireSuperAdmin(req, res, next) {
+  requireAdmin(req, res, () => {
+    const isSuper = req.adminUser.role === 'superadmin' || req.adminUser.tenant_id === 'default';
+    if (!isSuper) {
+      return res.status(403).json({
+        code: 403,
+        message: '权限不足：该功能（如删除/清空订单）仅归超级管理总台所有，子租户管理后台无权执行。',
+        data: null
+      });
+    }
+    next();
+  });
+}
+
+/**
  * POST /api/admin/login
- * 管理员登录接口（账号: admin, 密码: admin123）
+ * 管理员登录接口（支持多租户独立账号与密码校验，默认初始密码 admin123，可随时独立修改）
  */
 router.post('/login', async (req, res, next) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, tenant_id } = req.body || {};
 
     if (!username || !password) {
       return res.status(400).json({
@@ -49,28 +99,79 @@ router.post('/login', async (req, res, next) => {
       });
     }
 
-    // 校验固定凭证 admin / admin123
-    if (username.trim() === 'admin' && password === 'admin123') {
-      const token = `admin_token_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-      activeAdminTokens.add(token);
+    // 智能识别登录租户空间：优先使用请求体中的 tenant_id，其次 header，其次当前中间件租户，缺省 default (超级总台)
+    const rawTenant = tenant_id || req.headers['x-tenant-id'] || req.query.tenant || (req.tenant && req.tenant.tenant_id) || 'default';
+    const cleanTenant = rawTenant.trim().toLowerCase();
+    const cleanUsername = username.trim();
+    const cleanPassword = String(password).trim();
 
-      return res.json({
-        code: 200,
-        message: '登录成功',
-        data: {
-          token,
-          username: 'admin',
-          role: 'administrator',
-          login_time: new Date().toISOString()
-        }
-      });
+    // 查询该租户空间下的管理员账号
+    let userRes = await query(
+      'SELECT id, tenant_id, username, password_hash, salt, role FROM admin_users WHERE tenant_id = $1 AND username = $2',
+      [cleanTenant, cleanUsername]
+    );
+
+    let user = null;
+    if (userRes.rowCount > 0) {
+      user = userRes.rows[0];
+      const isMatch = verifyAdminPassword(cleanPassword, user.password_hash, user.salt);
+      // 兼容初始迁移默认密码 admin123
+      const isDefaultFallback = !isMatch && cleanPassword === 'admin123' && user.password_hash === 'admin123';
+      
+      if (!isMatch && !isDefaultFallback) {
+        return res.status(401).json({
+          code: 401,
+          message: `密码错误，请核对 [${cleanTenant}] 专区的管理员密码`,
+          data: null
+        });
+      }
     } else {
-      return res.status(401).json({
-        code: 401,
-        message: '账号或密码错误，请重新输入',
-        data: null
-      });
+      // 首次使用自动初始化该租户下的 admin 账号
+      if (cleanUsername === 'admin' && cleanPassword === 'admin123') {
+        const salt = crypto.randomBytes(16).toString('hex');
+        const hash = hashAdminPassword('admin123', salt);
+        const role = cleanTenant === 'default' ? 'superadmin' : 'tenant_admin';
+        const createRes = await query(
+          `INSERT INTO admin_users (tenant_id, username, password_hash, salt, role)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (tenant_id, username) DO UPDATE SET password_hash = EXCLUDED.password_hash
+           RETURNING id, tenant_id, username, password_hash, salt, role`,
+          [cleanTenant, cleanUsername, hash, salt, role]
+        );
+        user = createRes.rows[0];
+      } else {
+        return res.status(401).json({
+          code: 401,
+          message: `未找到租户 [${cleanTenant}] 的管理员账号或密码错误`,
+          data: null
+        });
+      }
     }
+
+    // 生成安全会话 Token 并关联租户与身份权限
+    const token = `admin_token_${user.tenant_id}_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
+    const sessionData = {
+      id: user.id,
+      username: user.username,
+      tenant_id: user.tenant_id,
+      role: user.role,
+      is_super_admin: user.role === 'superadmin' || user.tenant_id === 'default',
+      login_time: new Date().toISOString()
+    };
+    activeAdminSessions.set(token, sessionData);
+
+    return res.json({
+      code: 200,
+      message: '登录成功',
+      data: {
+        token,
+        username: user.username,
+        tenant_id: user.tenant_id,
+        role: user.role,
+        is_super_admin: sessionData.is_super_admin,
+        login_time: sessionData.login_time
+      }
+    });
   } catch (error) {
     next(error);
   }
@@ -84,7 +185,7 @@ router.post('/logout', (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.replace(/^Bearer\s+/, '');
   if (token) {
-    activeAdminTokens.delete(token);
+    activeAdminSessions.delete(token);
   }
   return res.json({
     code: 200,
@@ -95,14 +196,118 @@ router.post('/logout', (req, res) => {
 
 /**
  * GET /api/admin/check
- * 校验当前登录状态
+ * 校验当前登录状态与当前登录租户信息
  */
 router.get('/check', requireAdmin, (req, res) => {
   return res.json({
     code: 200,
     message: '凭证有效',
-    data: { username: 'admin', role: 'administrator' }
+    data: {
+      username: req.adminUser.username,
+      tenant_id: req.adminUser.tenant_id,
+      role: req.adminUser.role,
+      is_super_admin: req.adminUser.role === 'superadmin' || req.adminUser.tenant_id === 'default'
+    }
   });
+});
+
+/**
+ * PUT /api/admin/password
+ * 修改当前登录管理员密码 (所有后台通用，每个子租户独立修改，修改后只对当前租户生效)
+ */
+router.put('/password', requireAdmin, async (req, res, next) => {
+  try {
+    const { old_password, new_password, confirm_password } = req.body || {};
+
+    if (!old_password || !new_password) {
+      return res.status(400).json({ code: 400, message: '请填写原密码和新密码' });
+    }
+
+    if (new_password.length < 6) {
+      return res.status(400).json({ code: 400, message: '新密码长度至少需要 6 个字符' });
+    }
+
+    if (new_password !== confirm_password) {
+      return res.status(400).json({ code: 400, message: '两次输入的新密码不一致，请重新核对' });
+    }
+
+    const { tenant_id, username } = req.adminUser;
+
+    // 获取当前用户记录
+    const userRes = await query(
+      'SELECT id, password_hash, salt FROM admin_users WHERE tenant_id = $1 AND username = $2',
+      [tenant_id, username]
+    );
+
+    if (userRes.rowCount === 0) {
+      return res.status(404).json({ code: 404, message: '未找到管理员账号' });
+    }
+
+    const user = userRes.rows[0];
+
+    // 验证原密码
+    const isMatch = verifyAdminPassword(old_password, user.password_hash, user.salt);
+    const isDefaultFallback = !isMatch && old_password === 'admin123' && user.password_hash === 'admin123';
+    if (!isMatch && !isDefaultFallback) {
+      return res.status(400).json({ code: 400, message: '原密码错误，修改失败' });
+    }
+
+    // 生成新哈希与 Salt
+    const newSalt = crypto.randomBytes(16).toString('hex');
+    const newHash = hashAdminPassword(new_password, newSalt);
+
+    await query(
+      'UPDATE admin_users SET password_hash = $1, salt = $2, updated_at = NOW() WHERE tenant_id = $3 AND username = $4',
+      [newHash, newSalt, tenant_id, username]
+    );
+
+    console.log(`[Admin] 租户 [${tenant_id}] 管理员账号 [${username}] 密码已成功更新`);
+
+    return res.json({
+      code: 200,
+      message: `🎉 [${tenant_id === 'default' ? '超级总台' : tenant_id + ' 专区'}] 管理员密码修改成功！新密码已即刻生效。`,
+      data: { tenant_id, username }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/admin/tenants/:tenantId/reset-password
+ * 超级管理员重置子租户管理员密码
+ */
+router.put('/tenants/:tenantId/reset-password', requireSuperAdmin, async (req, res, next) => {
+  try {
+    const { tenantId } = req.params;
+    const { new_password } = req.body || {};
+
+    if (!new_password || new_password.length < 6) {
+      return res.status(400).json({ code: 400, message: '重置密码长度至少需要 6 个字符' });
+    }
+
+    const newSalt = crypto.randomBytes(16).toString('hex');
+    const newHash = hashAdminPassword(new_password, newSalt);
+
+    const updateRes = await query(
+      `INSERT INTO admin_users (tenant_id, username, password_hash, salt, role, updated_at)
+       VALUES ($1, 'admin', $2, $3, 'tenant_admin', NOW())
+       ON CONFLICT (tenant_id, username) DO UPDATE
+       SET password_hash = EXCLUDED.password_hash,
+           salt = EXCLUDED.salt,
+           updated_at = NOW()
+       RETURNING id, tenant_id, username`,
+      [tenantId, newHash, newSalt]
+    );
+
+    return res.json({
+      code: 200,
+      message: `子租户 [${tenantId}] 管理员密码已成功重置！`,
+      data: updateRes.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 /**

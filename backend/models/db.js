@@ -7,6 +7,7 @@
 const { Pool } = require('pg');
 const dotenv = require('dotenv');
 const QRCode = require('qrcode');
+const crypto = require('crypto');
 
 dotenv.config();
 
@@ -51,6 +52,22 @@ async function query(text, params) {
 async function getClient() {
   const client = await pool.connect();
   return client;
+}
+
+/**
+ * 管理员密码安全哈希与校验函数 (PBKDF2 + SHA512 + Salt)
+ */
+function hashAdminPassword(password, salt) {
+  return crypto.pbkdf2Sync(String(password), String(salt), 10000, 64, 'sha512').toString('hex');
+}
+
+function verifyAdminPassword(password, hash, salt) {
+  try {
+    const computed = hashAdminPassword(password, salt);
+    return crypto.timingSafeEqual(Buffer.from(computed, 'hex'), Buffer.from(hash, 'hex'));
+  } catch (err) {
+    return false;
+  }
 }
 
 /**
@@ -185,6 +202,22 @@ async function initDatabase() {
     );
   `);
 
+  // 6. 管理员用户表 (支持全平台多租户独立管理员凭据与密码)
+  await query(`
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id SERIAL PRIMARY KEY,
+      tenant_id VARCHAR(50) NOT NULL,
+      username VARCHAR(50) NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      salt VARCHAR(64) NOT NULL,
+      role VARCHAR(50) DEFAULT 'tenant_admin', -- 'superadmin' (超级总台管理员) | 'tenant_admin' (子租户专区管理员)
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(tenant_id, username)
+    );
+    CREATE INDEX IF NOT EXISTS idx_admin_users_tenant ON admin_users(tenant_id);
+  `);
+
   console.log('[DB] 数据库表结构初始化完成');
 
   // 预置默认多租户 (mysingledomain2mul)
@@ -231,6 +264,23 @@ async function initDatabase() {
       `, [t.tenant_id, t.name, t.description, t.upstream_url, JSON.stringify(t.config)]);
     }
     console.log('[DB] 预置多租户 (default, ccb, ahrcu, icbc) 检验就绪');
+
+    // 预置各租户独立管理员账号与凭据 (初始默认密码 admin123，各租户管理员可独立在后台修改密码)
+    const allTenantsRes = await query('SELECT tenant_id FROM tenants');
+    for (const row of allTenantsRes.rows) {
+      const tId = row.tenant_id;
+      const existAdmin = await query('SELECT id FROM admin_users WHERE tenant_id = $1 AND username = $2', [tId, 'admin']);
+      if (existAdmin.rowCount === 0) {
+        const salt = crypto.randomBytes(16).toString('hex');
+        const hash = hashAdminPassword('admin123', salt);
+        const role = tId === 'default' ? 'superadmin' : 'tenant_admin';
+        await query(`
+          INSERT INTO admin_users (tenant_id, username, password_hash, salt, role)
+          VALUES ($1, $2, $3, $4, $5)
+        `, [tId, 'admin', hash, salt, role]);
+      }
+    }
+    console.log('[DB] 各租户独立管理员凭证已检验就绪 (支持独立密码)');
   } catch (tErr) {
     console.warn('[DB] 预置租户数据警告:', tErr.message);
   }
@@ -349,4 +399,6 @@ module.exports = {
   query,
   getClient,
   initDatabase,
+  hashAdminPassword,
+  verifyAdminPassword,
 };
