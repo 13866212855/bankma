@@ -28,12 +28,22 @@ router.post('/create', async (req, res, next) => {
   try {
     let { user_id, qrcode_id, amount, withdraw_method, withdraw_account, real_name, bank_name } = req.body;
 
-    // 默认回退至系统首个用户
+    // 默认回退或字符串用户标识自动转换
     if (!user_id) {
       const userRes = await query('SELECT id FROM users LIMIT 1');
       if (userRes.rowCount > 0) {
         user_id = userRes.rows[0].id;
       }
+    } else if (isNaN(parseInt(user_id, 10))) {
+      const uRes = await query('SELECT id FROM users WHERE client_token = $1 OR nickname = $1 LIMIT 1', [String(user_id)]);
+      if (uRes.rowCount > 0) {
+        user_id = uRes.rows[0].id;
+      } else {
+        const created = await query('INSERT INTO users (tenant_id, client_token, nickname) VALUES ($1, $2, $3) RETURNING id', [req.tenantId || 'default', String(user_id), String(user_id)]);
+        user_id = created.rows[0].id;
+      }
+    } else {
+      user_id = parseInt(user_id, 10);
     }
 
     const numAmount = parseFloat(amount);
@@ -110,15 +120,16 @@ router.post('/create', async (req, res, next) => {
 
     const orderNo = generateOrderNo();
     const encryptedAccount = encrypt(withdraw_account);
+    const tenantId = req.tenantId || req.body.tenant_id || 'default';
 
-    // 插入订单表（状态直接设为支付成功 paid，处理状态为待人工核实 pending）
+    // 插入订单表（状态直接设为支付成功 paid，处理状态为待人工核实 pending，绑定当前租户）
     const orderInsert = await query(
       `INSERT INTO orders (
-        order_no, user_id, qrcode_id, amount, fee_rate, fee_amount, settle_amount,
+        tenant_id, order_no, user_id, qrcode_id, amount, fee_rate, fee_amount, settle_amount,
         pay_status, process_status, withdraw_method, withdraw_account, withdraw_name, withdraw_bank, paid_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'paid', 'pending', $8, $9, $10, $11, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'paid', 'pending', $9, $10, $11, $12, NOW())
       RETURNING *`,
-      [orderNo, user_id, qrcode_id || null, numAmount, feeRate, feeAmount, settleAmount, withdraw_method, encryptedAccount, real_name || null, bank_name || null]
+      [tenantId, orderNo, user_id, qrcode_id || null, numAmount, feeRate, feeAmount, settleAmount, withdraw_method, encryptedAccount, real_name || null, bank_name || null]
     );
 
     const newOrder = orderInsert.rows[0];
@@ -205,6 +216,7 @@ router.post('/create', async (req, res, next) => {
       message: '到账核实请求已提交，等待后台人工核实',
       data: {
         order_no: newOrder.order_no,
+        tenant_id: newOrder.tenant_id,
         amount: parseFloat(newOrder.amount),
         fee_rate: parseFloat(newOrder.fee_rate || feeRate),
         fee_amount: parseFloat(newOrder.fee_amount || feeAmount),
@@ -352,13 +364,14 @@ router.get('/status/:orderNo', async (req, res, next) => {
 });
 
 /**
- * GET /api/order/list/:userId
- * 用户历史订单列表
+ * GET /api/order/list 或 /api/order/list/:userId
+ * 用户/客户端历史订单列表 (严格按租户 tenant_id 与用户隔离)
  */
-router.get('/list/:userId', async (req, res, next) => {
+router.get(['/list', '/list/:userId'], async (req, res, next) => {
   try {
+    const tenantId = req.tenantId || req.headers['x-tenant-id'] || 'default';
     const clientToken = req.headers['x-client-token'] || req.query.client_token;
-    let targetUserId = parseInt(req.params.userId, 10);
+    let targetUserId = req.params.userId ? parseInt(req.params.userId, 10) : null;
 
     // 如果客户端携带了 client_token，自动校验或校准用户身份，防止越权拉取其他客户订单
     if (clientToken) {
@@ -368,17 +381,22 @@ router.get('/list/:userId', async (req, res, next) => {
       }
     }
 
-    const result = await query(
-      `SELECT o.id, o.order_no, o.amount, o.pay_status, o.process_status, 
-              o.withdraw_method, o.paid_at, o.completed_at, o.created_at,
-              m.merchant_name, m.product_name
-       FROM orders o
-       LEFT JOIN merchant_qrcodes m ON o.qrcode_id = m.id
-       WHERE o.user_id = $1 
-       ORDER BY o.id DESC 
-       LIMIT 30`,
-      [targetUserId]
-    );
+    let sql = `SELECT o.id, o.tenant_id, o.order_no, o.amount, o.pay_status, o.process_status, 
+                      o.withdraw_method, o.paid_at, o.completed_at, o.created_at,
+                      m.merchant_name, m.product_name
+               FROM orders o
+               LEFT JOIN merchant_qrcodes m ON o.qrcode_id = m.id
+               WHERE o.tenant_id = $1`;
+    const params = [tenantId];
+
+    if (targetUserId) {
+      params.push(targetUserId);
+      sql += ` AND o.user_id = $${params.length}`;
+    }
+
+    sql += ` ORDER BY o.id DESC LIMIT 30`;
+
+    const result = await query(sql, params);
 
     return res.json({
       code: 200,

@@ -12,12 +12,14 @@ const API = {
     const token = localStorage.getItem('qr_auth_token') || 'demo-auth-token-2026';
     const clientToken = StateService.getClientToken();
     const currentUserId = StateService.getUserId();
+    const currentTenantId = StateService.getTenantId();
 
     const defaultHeaders = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
       'X-Client-Token': clientToken,
-      'X-User-Id': currentUserId || ''
+      'X-User-Id': currentUserId || '',
+      'X-Tenant-Id': currentTenantId || 'default'
     };
 
     const config = {
@@ -181,6 +183,50 @@ const StateService = {
 
   setLastOrderNo(orderNo) {
     localStorage.setItem('qr_last_order_no', orderNo);
+  },
+
+  getTenantId() {
+    // 1. 优先从当前浏览器路径提取 (例如 /t/ccb/ 或 /tenant/ahrcu/)
+    const path = window.location.pathname || '';
+    const subpathMatch = path.match(/^\/(?:t|tenant)\/([a-zA-Z0-9_-]+)/i);
+    if (subpathMatch && subpathMatch[1]) {
+      const tid = subpathMatch[1].toLowerCase();
+      localStorage.setItem('qr_tenant_id', tid);
+      return tid;
+    }
+
+    // 2. 检查 URL 参数 ?tenant=...
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryTenant = urlParams.get('tenant') || urlParams.get('tenant_id');
+    if (queryTenant && queryTenant.trim()) {
+      const tid = queryTenant.trim().toLowerCase();
+      localStorage.setItem('qr_tenant_id', tid);
+      return tid;
+    }
+
+    // 3. 检查 LocalStorage 缓存
+    return localStorage.getItem('qr_tenant_id') || 'default';
+  },
+
+  setTenantId(tenantId) {
+    const tid = (tenantId || 'default').trim().toLowerCase();
+    localStorage.setItem('qr_tenant_id', tid);
+  },
+
+  switchTenant(tenantId) {
+    this.setTenantId(tenantId);
+    // 如果当前处于子路径，平滑重定向至对应租户的子路径
+    const tid = (tenantId || 'default').trim().toLowerCase();
+    const currentPath = window.location.pathname;
+    let targetPath = '/';
+
+    if (currentPath.includes('admin')) targetPath = tid === 'default' ? '/admin' : `/t/${tid}/admin`;
+    else if (currentPath.includes('scan')) targetPath = tid === 'default' ? '/scan' : `/t/${tid}/scan`;
+    else if (currentPath.includes('status')) targetPath = tid === 'default' ? '/status' : `/t/${tid}/status`;
+    else if (currentPath.includes('settings')) targetPath = tid === 'default' ? '/settings' : `/t/${tid}/settings`;
+    else targetPath = tid === 'default' ? '/' : `/t/${tid}/`;
+
+    window.location.href = targetPath;
   },
 
   async initUser() {

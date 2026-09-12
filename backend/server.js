@@ -18,11 +18,13 @@ if (dns.setDefaultResultOrder) {
 dotenv.config();
 
 const { initDatabase } = require('./models/db');
+const { tenantMiddleware } = require('./utils/tenant');
 const qrcodeRoutes = require('./routes/qrcode');
 const orderRoutes = require('./routes/order');
 const withdrawRoutes = require('./routes/withdraw');
 const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
+const tenantRoutes = require('./routes/tenant');
 
 const app = express();
 // 平台反向代理仅支持监听 3000 端口
@@ -76,8 +78,11 @@ const authMiddleware = (req, res, next) => {
 };
 
 app.use(authMiddleware);
+// 挂载多租户网关与路由解析中间件 (mysingledomain2mul)
+app.use(tenantMiddleware);
 
 // 挂载 API 路由
+app.use('/api/tenant', tenantRoutes);
 app.use('/api/qrcode', qrcodeRoutes);
 app.use('/api/merchant', qrcodeRoutes); // 支持 /api/merchant/qrcode 与 /api/merchant/qrcodes
 app.use('/api/order', orderRoutes);
@@ -89,18 +94,30 @@ app.use('/api/admin', adminRoutes);
 const frontendPath = path.join(__dirname, '../frontend');
 app.use(express.static(frontendPath));
 
-// 路由页面别名与回退
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(frontendPath, 'admin.html'));
-});
-app.get('/scan', (req, res) => {
-  res.sendFile(path.join(frontendPath, 'scan.html'));
-});
-app.get('/status', (req, res) => {
-  res.sendFile(path.join(frontendPath, 'status.html'));
-});
-app.get('/settings', (req, res) => {
-  res.sendFile(path.join(frontendPath, 'settings.html'));
+// 路由页面别名与回退 (支持直接访问或租户子路径 /t/:tenantId/*)
+const pageRoutes = [
+  { path: '/admin', file: 'admin.html' },
+  { path: '/scan', file: 'scan.html' },
+  { path: '/status', file: 'status.html' },
+  { path: '/settings', file: 'settings.html' },
+  { path: '/', file: 'index.html' }
+];
+
+pageRoutes.forEach(({ path: pagePath, file }) => {
+  // 根路径直达
+  app.get(pagePath, (req, res) => {
+    res.sendFile(path.join(frontendPath, file));
+  });
+  // 租户子路径直达 /t/:tenantId/...
+  if (pagePath === '/') {
+    app.get(/^\/t\/[a-zA-Z0-9_-]+\/?$/, (req, res) => {
+      res.sendFile(path.join(frontendPath, 'index.html'));
+    });
+  } else {
+    app.get(`/t/:tenantId${pagePath}`, (req, res) => {
+      res.sendFile(path.join(frontendPath, file));
+    });
+  }
 });
 
 // 健康检查端点

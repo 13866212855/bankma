@@ -10,6 +10,7 @@ const { query } = require('../models/db');
 const { maskAccount, decrypt } = require('../utils/crypto');
 const { sendTestEmail } = require('../utils/email');
 const { generateTTSAudio } = require('../utils/tts');
+const { getAllTenants, getTenantById, invalidateTenantCache } = require('../utils/tenant');
 
 // 简单高效的管理端 Token 缓存
 const activeAdminTokens = new Set(['admin_dev_token_secret_123']);
@@ -105,19 +106,230 @@ router.get('/check', requireAdmin, (req, res) => {
 });
 
 /**
+ * ==================== 多租户管理 (mysingledomain2mul) ====================
+ */
+
+/**
+ * GET /api/admin/tenants
+ * 管理端获取所有租户列表（包含各自的二维码数量、订单数量与交易额统计）
+ */
+router.get('/tenants', requireAdmin, async (req, res, next) => {
+  try {
+    const tenantsList = await getAllTenants(false);
+
+    // 统计各租户下的收款码数与订单统计
+    const statsQuery = await query(`
+      SELECT 
+        tenant_id,
+        COUNT(DISTINCT id) as total_orders,
+        COALESCE(SUM(CASE WHEN process_status = 'completed' THEN amount ELSE 0 END), 0) as total_volume,
+        COUNT(DISTINCT CASE WHEN process_status = 'pending' THEN id ELSE NULL END) as pending_orders
+      FROM orders
+      GROUP BY tenant_id
+    `);
+    const statsMap = {};
+    for (const r of statsQuery.rows) {
+      statsMap[r.tenant_id] = {
+        total_orders: parseInt(r.total_orders, 10),
+        total_volume: parseFloat(r.total_volume),
+        pending_orders: parseInt(r.pending_orders, 10)
+      };
+    }
+
+    const qrCountQuery = await query(`
+      SELECT tenant_id, COUNT(*) as qr_count
+      FROM merchant_qrcodes
+      GROUP BY tenant_id
+    `);
+    const qrCountMap = {};
+    for (const r of qrCountQuery.rows) {
+      qrCountMap[r.tenant_id] = parseInt(r.qr_count, 10);
+    }
+
+    const enriched = tenantsList.map(t => ({
+      id: t.id,
+      tenant_id: t.tenant_id,
+      name: t.name,
+      description: t.description,
+      domain: t.domain,
+      upstream_url: t.upstream_url,
+      is_active: t.is_active,
+      config: typeof t.config === 'string' ? JSON.parse(t.config || '{}') : (t.config || {}),
+      created_at: t.created_at,
+      qr_count: qrCountMap[t.tenant_id] || 0,
+      total_orders: (statsMap[t.tenant_id] && statsMap[t.tenant_id].total_orders) || 0,
+      total_volume: (statsMap[t.tenant_id] && statsMap[t.tenant_id].total_volume) || 0,
+      pending_orders: (statsMap[t.tenant_id] && statsMap[t.tenant_id].pending_orders) || 0
+    }));
+
+    return res.json({
+      code: 200,
+      message: '获取成功',
+      data: {
+        total: enriched.length,
+        items: enriched
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/tenants
+ * 创建新租户 (开辟全新专属隔离空间与子路径 /t/:tenantId/)
+ */
+router.post('/tenants', requireAdmin, async (req, res, next) => {
+  try {
+    const { tenant_id, name, description, domain, upstream_url, config, is_active } = req.body;
+
+    if (!tenant_id || !tenant_id.trim()) {
+      return res.status(400).json({ code: 400, message: '租户唯一英文标识 (tenant_id) 为必填项' });
+    }
+    const cleanTenantId = tenant_id.trim().toLowerCase();
+    if (!/^[a-z0-9_-]{2,30}$/.test(cleanTenantId)) {
+      return res.status(400).json({ code: 400, message: '租户标识仅支持2-30位小写字母、数字、中划线或下划线' });
+    }
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ code: 400, message: '租户名称为必填项' });
+    }
+
+    // 检查是否已存在
+    const existing = await query('SELECT id FROM tenants WHERE tenant_id = $1', [cleanTenantId]);
+    if (existing.rowCount > 0) {
+      return res.status(400).json({ code: 400, message: `租户标识 [${cleanTenantId}] 已存在，请更换其他标识` });
+    }
+
+    const insertRes = await query(`
+      INSERT INTO tenants (tenant_id, name, description, domain, upstream_url, config, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `, [
+      cleanTenantId,
+      name.trim(),
+      (description || '').trim(),
+      (domain || '').trim() || null,
+      (upstream_url || '').trim() || null,
+      JSON.stringify(config || {}),
+      is_active !== false
+    ]);
+
+    invalidateTenantCache(cleanTenantId);
+
+    return res.status(201).json({
+      code: 201,
+      message: `租户 [${name.trim()}] 创建成功，已开辟子路径 /t/${cleanTenantId}/ 访问入口`,
+      data: insertRes.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/admin/tenants/:tenantId
+ * 更新租户信息及 upstream 代理配置
+ */
+router.put('/tenants/:tenantId', requireAdmin, async (req, res, next) => {
+  try {
+    const { tenantId } = req.params;
+    const { name, description, domain, upstream_url, config, is_active } = req.body;
+    const cleanTenantId = tenantId.trim().toLowerCase();
+
+    const check = await query('SELECT id, config FROM tenants WHERE tenant_id = $1', [cleanTenantId]);
+    if (check.rowCount === 0) {
+      return res.status(404).json({ code: 404, message: '未找到指定租户' });
+    }
+
+    const currentConfig = check.rows[0].config || {};
+    const mergedConfig = config ? { ...(typeof currentConfig === 'string' ? JSON.parse(currentConfig) : currentConfig), ...config } : currentConfig;
+
+    const updateRes = await query(`
+      UPDATE tenants
+      SET name = COALESCE($1, name),
+          description = COALESCE($2, description),
+          domain = $3,
+          upstream_url = $4,
+          config = $5,
+          is_active = COALESCE($6, is_active)
+      WHERE tenant_id = $7
+      RETURNING *
+    `, [
+      name ? name.trim() : null,
+      description !== undefined ? description.trim() : null,
+      domain !== undefined ? (domain ? domain.trim() : null) : null,
+      upstream_url !== undefined ? (upstream_url ? upstream_url.trim() : null) : null,
+      JSON.stringify(mergedConfig),
+      is_active !== undefined ? Boolean(is_active) : null,
+      cleanTenantId
+    ]);
+
+    invalidateTenantCache(cleanTenantId);
+
+    return res.json({
+      code: 200,
+      message: '租户信息更新成功',
+      data: updateRes.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/admin/tenants/:tenantId
+ * 停用/删除租户 (默认租户禁止删除)
+ */
+router.delete('/tenants/:tenantId', requireAdmin, async (req, res, next) => {
+  try {
+    const { tenantId } = req.params;
+    const cleanTenantId = tenantId.trim().toLowerCase();
+
+    if (cleanTenantId === 'default') {
+      return res.status(400).json({ code: 400, message: '系统默认总部门户 (default) 为根租户，不可删除' });
+    }
+
+    const delRes = await query('DELETE FROM tenants WHERE tenant_id = $1 RETURNING *', [cleanTenantId]);
+    if (delRes.rowCount === 0) {
+      return res.status(404).json({ code: 404, message: '未找到对应租户' });
+    }
+
+    invalidateTenantCache(cleanTenantId);
+
+    return res.json({
+      code: 200,
+      message: `租户 [${cleanTenantId}] 已成功移除`,
+      data: { tenant_id: cleanTenantId }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/admin/qrcodes
- * 获取所有商家收款码列表（管理端，含激活状态、费率与限额）
+ * 获取所有商家收款码列表（管理端，支持按租户过滤、含激活状态、费率与限额）
  */
 router.get('/qrcodes', requireAdmin, async (req, res, next) => {
   try {
-    const result = await query(
-      `SELECT id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at
-       FROM merchant_qrcodes
-       ORDER BY is_active DESC, id DESC`
-    );
+    const filterTenant = req.query.tenant || req.query.tenant_id;
+    let sql = `SELECT id, tenant_id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at
+               FROM merchant_qrcodes`;
+    const params = [];
+
+    if (filterTenant && filterTenant !== 'all') {
+      sql += ` WHERE tenant_id = $1`;
+      params.push(filterTenant.trim().toLowerCase());
+    }
+
+    sql += ` ORDER BY is_active DESC, id DESC`;
+
+    const result = await query(sql, params);
 
     const list = result.rows.map(item => ({
       id: item.id,
+      tenant_id: item.tenant_id || 'default',
       merchant_name: item.merchant_name,
       product_name: item.product_name,
       amount: parseFloat(item.amount || 0),
@@ -151,6 +363,7 @@ router.get('/qrcodes', requireAdmin, async (req, res, next) => {
 router.post('/qrcode', requireAdmin, async (req, res, next) => {
   try {
     const { 
+      tenant_id,
       merchant_name, 
       product_name, 
       amount, 
@@ -162,6 +375,8 @@ router.post('/qrcode', requireAdmin, async (req, res, next) => {
       qr_image_url, 
       is_active 
     } = req.body;
+
+    const targetTenant = (tenant_id || req.tenantId || 'default').trim().toLowerCase();
 
     if (!merchant_name) {
       return res.status(400).json({
@@ -193,18 +408,19 @@ router.post('/qrcode', requireAdmin, async (req, res, next) => {
       });
     }
 
-    // 若设为当前展示，先将其他二维码设为非激活
+    // 若设为当前展示，先将同租户下的其他二维码设为非激活
     const shouldBeActive = is_active !== false;
     if (shouldBeActive) {
-      await query(`UPDATE merchant_qrcodes SET is_active = false`);
+      await query(`UPDATE merchant_qrcodes SET is_active = false WHERE tenant_id = $1`, [targetTenant]);
     }
 
     const insertResult = await query(
       `INSERT INTO merchant_qrcodes 
-        (merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        (tenant_id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
+        targetTenant,
         merchant_name.trim(),
         (product_name || '扫码加款收款通道').trim(),
         numAmount,
@@ -417,13 +633,15 @@ router.delete('/qrcode/:id', requireAdmin, async (req, res, next) => {
 
 /**
  * GET /api/admin/orders
- * 查看所有订单列表（管理端，附带完整明细供人工核实和打款）
+ * 查看所有订单列表（管理端，支持按租户过滤、附带完整明细供人工核实和打款）
  */
 router.get('/orders', requireAdmin, async (req, res, next) => {
   try {
-    const result = await query(`
+    const filterTenant = req.query.tenant || req.query.tenant_id;
+    let sql = `
       SELECT 
         o.id,
+        o.tenant_id,
         o.order_no,
         o.user_id,
         o.qrcode_id,
@@ -447,9 +665,17 @@ router.get('/orders', requireAdmin, async (req, res, next) => {
         m.channel_desc
       FROM orders o
       LEFT JOIN merchant_qrcodes m ON o.qrcode_id = m.id
-      ORDER BY o.id DESC
-      LIMIT 100
-    `);
+    `;
+    const params = [];
+
+    if (filterTenant && filterTenant !== 'all') {
+      sql += ` WHERE o.tenant_id = $1`;
+      params.push(filterTenant.trim().toLowerCase());
+    }
+
+    sql += ` ORDER BY o.id DESC LIMIT 100`;
+
+    const result = await query(sql, params);
 
     const orders = result.rows.map(row => {
       let plainAccount = '';
@@ -460,6 +686,7 @@ router.get('/orders', requireAdmin, async (req, res, next) => {
       }
       return {
         ...row,
+        tenant_id: row.tenant_id || 'default',
         amount: parseFloat(row.amount),
         fee_rate: parseFloat(row.fee_rate || 0.8),
         fee_amount: parseFloat(row.fee_amount || 0),
@@ -595,14 +822,35 @@ router.put('/orders/:orderNo/reject', requireAdmin, async (req, res, next) => {
 
 /**
  * GET /api/admin/stats
- * 获取概览统计数据
+ * 获取概览统计数据 (支持按租户过滤或全局汇总)
  */
 router.get('/stats', requireAdmin, async (req, res, next) => {
   try {
-    const qCount = await query(`SELECT COUNT(*) FROM merchant_qrcodes`);
-    const oCount = await query(`SELECT COUNT(*) FROM orders`);
-    const sumAmount = await query(`SELECT COALESCE(SUM(amount), 0) as total FROM orders WHERE process_status = 'completed'`);
-    const pendingCount = await query(`SELECT COUNT(*) FROM orders WHERE process_status = 'pending'`);
+    const filterTenant = req.query.tenant || req.query.tenant_id;
+    const isScoped = filterTenant && filterTenant !== 'all';
+    const tenantParam = isScoped ? filterTenant.trim().toLowerCase() : null;
+
+    let qCountSql = `SELECT COUNT(*) FROM merchant_qrcodes`;
+    let oCountSql = `SELECT COUNT(*) FROM orders`;
+    let sumAmountSql = `SELECT COALESCE(SUM(amount), 0) as total FROM orders WHERE process_status = 'completed'`;
+    let pendingCountSql = `SELECT COUNT(*) FROM orders WHERE process_status = 'pending'`;
+    const params = [];
+
+    if (isScoped) {
+      qCountSql += ` WHERE tenant_id = $1`;
+      oCountSql += ` WHERE tenant_id = $1`;
+      sumAmountSql += ` AND tenant_id = $1`;
+      pendingCountSql += ` AND tenant_id = $1`;
+      params.push(tenantParam);
+    }
+
+    const qCount = await query(qCountSql, params);
+    const oCount = await query(oCountSql, params);
+    const sumAmount = await query(sumAmountSql, params);
+    const pendingCount = await query(pendingCountSql, params);
+
+    // 租户总数
+    const tenantCountRes = await query(`SELECT COUNT(*) FROM tenants WHERE is_active = true`);
 
     return res.json({
       code: 200,
@@ -611,7 +859,9 @@ router.get('/stats', requireAdmin, async (req, res, next) => {
         total_qrcodes: parseInt(qCount.rows[0].count, 10),
         total_orders: parseInt(oCount.rows[0].count, 10),
         completed_amount: parseFloat(sumAmount.rows[0].total),
-        pending_orders: parseInt(pendingCount.rows[0].count, 10)
+        pending_orders: parseInt(pendingCount.rows[0].count, 10),
+        active_tenants: parseInt(tenantCountRes.rows[0].count, 10),
+        current_tenant: isScoped ? tenantParam : 'all'
       }
     });
   } catch (error) {
@@ -781,5 +1031,142 @@ async function handleTTS(req, res, next) {
 
 router.get('/tts', handleTTS);
 router.post('/tts', handleTTS);
+
+/**
+ * ========== mysingledomain2mul 多租户空间管理 API ==========
+ */
+
+/**
+ * GET /api/admin/tenants
+ * 获取系统中所有注册的租户空间及其微服务反代配置
+ */
+router.get('/tenants', requireAdmin, async (req, res, next) => {
+  try {
+    const tenants = await getAllTenants();
+    return res.json({
+      code: 200,
+      message: '获取租户列表成功',
+      data: tenants
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/admin/tenants
+ * 动态开通/创建新的租户空间 (支持独立上游微服务代理配置与数据隔离空间)
+ */
+router.post('/tenants', requireAdmin, async (req, res, next) => {
+  try {
+    const { tenant_id, name, description, upstream_url, config } = req.body;
+    if (!tenant_id || !name) {
+      return res.status(400).json({
+        code: 400,
+        message: '租户标识 (tenant_id) 和租户名称 (name) 不能为空'
+      });
+    }
+
+    const cleanId = tenant_id.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    if (!cleanId) {
+      return res.status(400).json({
+        code: 400,
+        message: '租户标识格式不合法，仅支持小写英文字母、数字、下划线及连字符'
+      });
+    }
+
+    const existing = await getTenantById(cleanId);
+    if (existing) {
+      return res.status(400).json({
+        code: 400,
+        message: `租户 [${cleanId}] 已存在，无法重复创建`
+      });
+    }
+
+    const insertRes = await query(
+      `INSERT INTO tenants (tenant_id, name, description, upstream_url, config, is_active)
+       VALUES ($1, $2, $3, $4, $5, true)
+       RETURNING *`,
+      [cleanId, name.trim(), description || '', upstream_url || null, JSON.stringify(config || {})]
+    );
+
+    invalidateTenantCache(cleanId);
+
+    return res.json({
+      code: 200,
+      message: `租户空间 [${name}] 开通成功`,
+      data: insertRes.rows[0]
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /api/admin/tenants/:tenantId
+ * 更新指定租户的配置 (包括上游微服务路由、启停状态等)
+ */
+router.put('/tenants/:tenantId', requireAdmin, async (req, res, next) => {
+  try {
+    const { tenantId } = req.params;
+    const { name, description, upstream_url, is_active, config } = req.body;
+
+    const existing = await getTenantById(tenantId);
+    if (!existing) {
+      return res.status(404).json({
+        code: 404,
+        message: `租户 [${tenantId}] 不存在`
+      });
+    }
+
+    const updateRes = await query(
+      `UPDATE tenants
+       SET name = COALESCE($1, name),
+           description = COALESCE($2, description),
+           upstream_url = $3,
+           is_active = COALESCE($4, is_active),
+           config = COALESCE($5, config)
+       WHERE tenant_id = $6
+       RETURNING *`,
+      [name, description, upstream_url, is_active, config ? JSON.stringify(config) : null, tenantId]
+    );
+
+    invalidateTenantCache(tenantId);
+
+    return res.json({
+      code: 200,
+      message: '租户配置已更新',
+      data: updateRes.rows[0]
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/admin/tenants/:tenantId
+ * 删除租户空间
+ */
+router.delete('/tenants/:tenantId', requireAdmin, async (req, res, next) => {
+  try {
+    const { tenantId } = req.params;
+    if (tenantId === 'default') {
+      return res.status(400).json({
+        code: 400,
+        message: '系统默认总台租户 (default) 禁止删除'
+      });
+    }
+
+    await query('DELETE FROM tenants WHERE tenant_id = $1', [tenantId]);
+    invalidateTenantCache(tenantId);
+
+    return res.json({
+      code: 200,
+      message: `租户 [${tenantId}] 已成功移除`
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 module.exports = router;

@@ -6,7 +6,8 @@
     "dev": "node backend/server.js",
     "start": "node backend/server.js",
     "build": "node -e \"console.log('Build successful')\"",
-    "lint": "echo 'No lint errors'"
+    "lint": "echo 'No lint errors'",
+    "test": "node backend/tests_multi_tenant.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

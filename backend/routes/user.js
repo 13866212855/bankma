@@ -24,6 +24,7 @@ function isAdmin(req) {
  * 确保每一个客户端设备拥有绝对独立的数据空间，绝不混淆、绝不串用！
  */
 async function resolveClientUser(req) {
+  const tenantId = req.tenantId || req.headers['x-tenant-id'] || 'default';
   let clientToken = req.headers['x-client-token'] || req.query.client_token;
   if (req.body && req.body.client_token) {
     clientToken = req.body.client_token;
@@ -32,18 +33,18 @@ async function resolveClientUser(req) {
   if (clientToken && typeof clientToken === 'string' && clientToken.trim()) {
     const cleanToken = clientToken.trim();
     const existing = await query(
-      'SELECT id, phone, nickname, client_token, created_at FROM users WHERE client_token = $1',
+      'SELECT id, tenant_id, phone, nickname, client_token, created_at FROM users WHERE client_token = $1',
       [cleanToken]
     );
     if (existing.rowCount > 0) {
       return existing.rows[0];
     }
 
-    // 首次使用该 Token，为其开辟独立专属用户空间
+    // 首次使用该 Token，为其开辟独立专属用户空间 (绑定当前租户)
     const nickname = '专属客户 #' + cleanToken.slice(-4);
     const created = await query(
-      'INSERT INTO users (client_token, nickname) VALUES ($1, $2) RETURNING id, phone, nickname, client_token, created_at',
-      [cleanToken, nickname]
+      'INSERT INTO users (tenant_id, client_token, nickname) VALUES ($1, $2, $3) RETURNING id, tenant_id, phone, nickname, client_token, created_at',
+      [tenantId, cleanToken, nickname]
     );
     return created.rows[0];
   }
@@ -52,8 +53,8 @@ async function resolveClientUser(req) {
   const genToken = 'ct_' + crypto.randomBytes(16).toString('hex');
   const nickname = '专属客户 #' + genToken.slice(-4);
   const created = await query(
-    'INSERT INTO users (client_token, nickname) VALUES ($1, $2) RETURNING id, phone, nickname, client_token, created_at',
-    [genToken, nickname]
+    'INSERT INTO users (tenant_id, client_token, nickname) VALUES ($1, $2, $3) RETURNING id, tenant_id, phone, nickname, client_token, created_at',
+    [tenantId, genToken, nickname]
   );
   return created.rows[0];
 }

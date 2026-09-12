@@ -309,8 +309,16 @@
         <span class="admin-role-badge">Admin</span>
       </div>
       <div class="admin-mobile-actions">
+        <!-- 多租户切换 (mysingledomain2mul) -->
+        <select id="admin-tenant-filter" style="height: 30px; font-size: 11px; padding: 0 6px; border-radius: 6px; border: 1.5px solid #C7D2FE; background: #EEF2FF; color: var(--primary-color); font-weight: 700; outline: none; max-width: 130px;" title="按租户隔离过滤">
+          <option value="all">🌐 全域所有租户</option>
+          <option value="default">默认总台 (default)</option>
+          <option value="ccb">建设银行 (ccb)</option>
+          <option value="ahrcu">安徽农金 (ahrcu)</option>
+          <option value="icbc">工商银行 (icbc)</option>
+        </select>
         <a href="index.html" class="btn btn-secondary btn-sm" style="height: 30px; font-size: 11px; padding: 0 8px;">
-          📱 前台首页
+          📱 前台
         </a>
         <button id="btn-admin-logout" class="btn btn-secondary btn-sm" style="height: 30px; font-size: 11px; padding: 0 8px; color: var(--danger-color);">
           退出
@@ -408,16 +416,19 @@
         </div>
       </div>
 
-      <!-- 选项卡切换 (订单审核 / 二维码管理 / 上传收款码) -->
+      <!-- 选项卡切换 (订单审核 / 二维码管理 / 上传收款码 / 多租户架构) -->
       <div class="mobile-tabs">
         <button type="button" class="mobile-tab-btn active" data-tab="tab-orders">
-          <span>📊</span> 订单与人工核实
+          <span>📊</span> 订单核实
         </button>
         <button type="button" class="mobile-tab-btn" data-tab="tab-list">
           <span>📋</span> 收款码管理
         </button>
         <button type="button" class="mobile-tab-btn" data-tab="tab-upload">
           <span>📤</span> 上传新码
+        </button>
+        <button type="button" class="mobile-tab-btn" data-tab="tab-tenants">
+          <span>🏢</span> 多租户专区
         </button>
       </div>
 
@@ -487,6 +498,16 @@
             <!-- 表单输入项 -->
             <div style="margin-top: 14px;">
               <div class="form-group">
+                <label class="form-label">所属租户空间 (mysingledomain2mul) <span style="color: var(--danger-color);">*</span></label>
+                <select id="input-tenant-id" class="form-input" style="height: 40px; font-weight: 600;">
+                  <option value="default">默认聚合收银总台 (default)</option>
+                  <option value="ccb">中国建设银行特约商户专区 (ccb)</option>
+                  <option value="ahrcu">安徽农金·金农信e付专区 (ahrcu)</option>
+                  <option value="icbc">中国工商银行商户e支付专区 (icbc)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
                 <label class="form-label">收款码/商户名称 <span style="color: var(--danger-color);">*</span></label>
                 <input type="text" id="input-merchant-name" class="form-input" placeholder="例如: 中国建设银行特约商户 (建行收款码)" required>
               </div>
@@ -536,6 +557,62 @@
         </div>
       </div>
 
+      <!-- ========== Tab 4: mysingledomain2mul 多租户空间与微服务架构 ========== -->
+      <div id="tab-tenants" class="tab-pane" style="display: none;">
+        <div style="background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%); border: 1px solid #C7D2FE; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px;">
+          <div style="font-size: 13px; font-weight: 700; color: #3730A3; display: flex; align-items: center; gap: 6px;">
+            <span>🌐</span> mysingledomain2mul 单域名多租户架构
+          </div>
+          <div style="font-size: 11px; color: #4338CA; margin-top: 4px; line-height: 1.5;">
+            支持子路径路由 (<code>/t/:tenantId/</code>)、自定义请求头 (<code>X-Tenant-Id</code>)、查询参数 (<code>?tenant=</code>) 及上游微服务反向代理 (<code>upstream_url</code>)。所有商户收款码、提现订单与客户数据均实现租户级安全物理隔离。
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <span style="font-size: 14px; font-weight: 700; color: var(--text-main);">已入驻租户空间</span>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-tenants" style="height: 28px; font-size: 11px; width: auto; padding: 0 8px;">🔄 刷新</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-open-create-tenant" style="height: 28px; font-size: 11px; width: auto; padding: 0 10px;">➕ 新增租户</button>
+          </div>
+        </div>
+
+        <div id="tenants-cards-container">
+          <div style="text-align: center; color: var(--text-muted); padding: 20px 0;">正在加载租户列表...</div>
+        </div>
+
+        <!-- 新增租户抽屉/卡片 -->
+        <div id="card-create-tenant" style="display: none; background: #FFFFFF; border: 1.5px solid var(--primary-color); border-radius: 12px; padding: 14px; margin-top: 14px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.08);">
+          <div style="font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <span>➕ 开通新租户空间</span>
+            <button type="button" id="btn-close-create-tenant" style="background: none; border: none; font-size: 18px; color: #64748B; cursor: pointer;">&times;</button>
+          </div>
+          <form id="create-tenant-form">
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+              <div class="form-group" style="flex: 1;">
+                <label class="form-label" style="font-size: 12px;">租户标识 (ID) <span style="color: var(--danger-color);">*</span></label>
+                <input type="text" id="new-tenant-id" class="form-input" placeholder="如 boc / spdb" required pattern="[a-zA-Z0-9_-]+" style="height: 38px; font-size: 12px;">
+              </div>
+              <div class="form-group" style="flex: 1.5;">
+                <label class="form-label" style="font-size: 12px;">专区名称 <span style="color: var(--danger-color);">*</span></label>
+                <input type="text" id="new-tenant-name" class="form-input" placeholder="如 中国银行专区" required style="height: 38px; font-size: 12px;">
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label class="form-label" style="font-size: 12px;">专区描述</label>
+              <input type="text" id="new-tenant-desc" class="form-input" placeholder="如 专注快捷商户出款服务" style="height: 38px; font-size: 12px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label class="form-label" style="font-size: 12px;">上游微服务地址 (选填)</label>
+              <input type="url" id="new-tenant-upstream" class="form-input" placeholder="留空使用本地隔离，或填如 http://172.29.173.42:8080" style="height: 38px; font-size: 12px;">
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn btn-secondary" id="btn-cancel-create-tenant" style="flex: 1; height: 38px;">取消</button>
+              <button type="submit" class="btn btn-primary" style="flex: 1.5; height: 38px;">确认创建</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <!-- 编辑收款码弹窗 Modal -->
       <div id="modal-edit-qr" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); z-index: 10000; align-items: center; justify-content: center; padding: 14px; backdrop-filter: blur(2px);">
         <div style="background: #FFF; width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto; border-radius: 16px; padding: 18px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
@@ -560,6 +637,16 @@
                   📷 更换新二维码图片
                 </button>
               </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label class="form-label" style="font-size: 12px;">所属租户空间 (mysingledomain2mul) <span style="color: var(--danger-color);">*</span></label>
+              <select id="edit-tenant-id" class="form-input" style="height: 38px; font-size: 13px; font-weight: 600;">
+                <option value="default">默认聚合收银总台 (default)</option>
+                <option value="ccb">中国建设银行特约商户专区 (ccb)</option>
+                <option value="ahrcu">安徽农金·金农信e付专区 (ahrcu)</option>
+                <option value="icbc">中国工商银行商户e支付专区 (icbc)</option>
+              </select>
             </div>
 
             <div class="form-group" style="margin-bottom: 10px;">
@@ -717,15 +804,25 @@
       }
     }
 
+    let currentTenantFilter = 'all';
+
     async function adminRequest(url, options = {}) {
       const token = getAdminToken();
+      const tenantParam = (currentTenantFilter && currentTenantFilter !== 'all') ? currentTenantFilter : null;
+      
+      let finalUrl = url;
+      if (tenantParam && !url.includes('tenant=')) {
+        finalUrl += (url.includes('?') ? '&' : '?') + 'tenant=' + encodeURIComponent(tenantParam);
+      }
+
       const headers = {
         'Content-Type': 'application/json',
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(tenantParam ? { 'X-Tenant-Id': tenantParam } : {}),
         ...(options.headers || {})
       };
 
-      const res = await fetch(url, { ...options, headers });
+      const res = await fetch(finalUrl, { ...options, headers });
       const json = await res.json();
       if (!res.ok || json.code !== 200) {
         if (res.status === 401 || json.code === 401) {
@@ -916,13 +1013,22 @@
 
         if (targetId === 'tab-orders') loadOrders();
         if (targetId === 'tab-list') loadQrList();
+        if (targetId === 'tab-tenants') loadTenants();
       });
+    });
+
+    // 租户过滤选择器联动
+    document.getElementById('admin-tenant-filter')?.addEventListener('change', (e) => {
+      currentTenantFilter = e.target.value;
+      Toast.info(`已切换至数据空间: ${currentTenantFilter === 'all' ? '全域所有租户' : currentTenantFilter}`);
+      loadAllData();
     });
 
     async function loadAllData() {
       loadStats();
       loadOrders();
       loadQrList();
+      loadTenants(true);
     }
 
     // 1. 统计
@@ -1306,6 +1412,7 @@
       e.preventDefault();
 
       const merchant_name = document.getElementById('input-merchant-name').value.trim();
+      const tenant_id = document.getElementById('input-tenant-id')?.value || 'default';
       const fee_rate = document.getElementById('input-fee-rate').value.trim();
       const max_limit = document.getElementById('input-max-limit').value.trim();
       const min_limit = document.getElementById('input-min-limit').value.trim() || '1';
@@ -1323,6 +1430,7 @@
         await adminRequest('/api/admin/qrcode', {
           method: 'POST',
           body: JSON.stringify({
+            tenant_id,
             merchant_name,
             product_name,
             fee_rate: parseFloat(fee_rate),
@@ -1365,6 +1473,9 @@
 
       currentEditImageDataUrl = '';
       document.getElementById('edit-qr-id').value = item.id;
+      if (document.getElementById('edit-tenant-id')) {
+        document.getElementById('edit-tenant-id').value = item.tenant_id || 'default';
+      }
       document.getElementById('edit-preview-img').src = item.qr_image_url || '';
       document.getElementById('edit-img-status').innerText = '当前已有图片 (点击右侧可更换)';
       document.getElementById('edit-merchant-name').value = item.merchant_name || '';
@@ -1419,6 +1530,7 @@
     document.getElementById('edit-qr-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const id = document.getElementById('edit-qr-id').value;
+      const tenant_id = document.getElementById('edit-tenant-id')?.value || 'default';
       const merchant_name = document.getElementById('edit-merchant-name').value.trim();
       const fee_rate = document.getElementById('edit-fee-rate').value.trim();
       const max_limit = document.getElementById('edit-max-limit').value.trim();
@@ -1435,6 +1547,7 @@
       Loading.show('正在保存修改...');
       try {
         const payload = {
+          tenant_id,
           merchant_name,
           product_name,
           fee_rate: parseFloat(fee_rate),
@@ -1460,6 +1573,173 @@
       } catch (err) {
         Loading.hide();
         Toast.error(err.message || '修改失败');
+      }
+    });
+
+    // ========== 4. mysingledomain2mul 多租户空间专区 ==========
+    async function loadTenants(silent = false) {
+      const container = document.getElementById('tenants-cards-container');
+      try {
+        const tenants = await adminRequest('/api/admin/tenants');
+        window.allTenants = tenants;
+
+        syncTenantSelects(tenants);
+
+        if (silent || !container) return;
+
+        if (!tenants || tenants.length === 0) {
+          container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 30px 16px; background: #FFF; border-radius: 12px; border: 1px solid var(--border-color);">暂无租户配置</div>';
+          return;
+        }
+
+        container.innerHTML = tenants.map(t => {
+          const isDefault = t.tenant_id === 'default';
+          const isCurrentFiltered = currentTenantFilter === t.tenant_id;
+          return `
+            <div class="qr-card-item" style="border-left: 4px solid ${isCurrentFiltered ? '#4F46E5' : '#CBD5E1'}; margin-bottom: 12px; padding: 12px; background: #FFF; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-weight: 700; font-size: 14px; color: #1E293B;">${t.name}</span>
+                    <span style="font-size: 11px; font-family: monospace; background: #EEF2FF; color: #4F46E5; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${t.tenant_id}</span>
+                    ${isDefault ? '<span style="font-size: 10px; background: #FEF3C7; color: #D97706; padding: 1px 6px; border-radius: 9999px; font-weight: 600;">系统总台</span>' : ''}
+                  </div>
+                  <div style="font-size: 12px; color: #64748B; margin-top: 4px;">${t.description || '无详细描述'}</div>
+                </div>
+                <div style="text-align: right;">
+                  <span style="font-size: 11px; color: ${t.is_active ? '#059669' : '#DC2626'}; font-weight: 600;">
+                    ${t.is_active ? '🟢 已生效' : '⚪ 已停用'}
+                  </span>
+                </div>
+              </div>
+
+              <!-- 架构与路由路由特征 -->
+              <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 11px;">
+                <div style="color: #475569; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; margin-bottom: 4px;">
+                  <span>子路径路由: <code style="color: #4F46E5; font-weight: 600;">/t/${t.tenant_id}/</code></span>
+                  <span>Header: <code>X-Tenant-Id: ${t.tenant_id}</code></span>
+                </div>
+                <div style="color: #64748B;">
+                  ${t.upstream_url ? `<span>上游微服务反代: <code style="color: #0284C7;">${t.upstream_url}</code></span>` : '<span>数据架构: <code>本地单体租户空间隔离 (PostgreSQL tenant_id)</code></span>'}
+                </div>
+              </div>
+
+              <!-- 快捷操作栏 -->
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px; border-top: 1px dashed #E2E8F0; font-size: 12px;">
+                <div style="display: flex; gap: 6px;">
+                  <a href="/t/${t.tenant_id}/" target="_blank" class="btn btn-secondary btn-sm" style="height: 26px; font-size: 11px; padding: 0 8px; color: #4F46E5;">
+                    📱 访问专属前台
+                  </a>
+                  <button type="button" class="btn btn-secondary btn-sm" style="height: 26px; font-size: 11px; padding: 0 8px; ${isCurrentFiltered ? 'background: #EEF2FF; color: #4F46E5; font-weight: 700;' : ''}" onclick="filterByTenant('${t.tenant_id}')">
+                    ${isCurrentFiltered ? '🎯 正在查看' : '🔍 查看该专区数据'}
+                  </button>
+                </div>
+                <div>
+                  ${!isDefault ? `
+                    <button type="button" class="btn btn-secondary btn-sm" style="height: 26px; font-size: 11px; padding: 0 6px; color: var(--danger-color);" onclick="deleteTenant('${t.tenant_id}')">
+                      删除
+                    </button>
+                  ` : ''}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        if (!silent && container) container.innerHTML = `<div style="color: var(--danger-color); text-align: center; padding: 20px;">租户加载失败: ${err.message}</div>`;
+      }
+    }
+
+    function syncTenantSelects(tenants) {
+      if (!tenants || tenants.length === 0) return;
+      
+      const filterSelect = document.getElementById('admin-tenant-filter');
+      const inputSelect = document.getElementById('input-tenant-id');
+      const editSelect = document.getElementById('edit-tenant-id');
+
+      if (filterSelect) {
+        const savedVal = filterSelect.value || currentTenantFilter;
+        filterSelect.innerHTML = '<option value="all">🌐 全域所有租户</option>' + 
+          tenants.map(t => `<option value="${t.tenant_id}">${t.name} (${t.tenant_id})</option>`).join('');
+        filterSelect.value = savedVal;
+      }
+
+      const tenantOptions = tenants.map(t => `<option value="${t.tenant_id}">${t.name} (${t.tenant_id})</option>`).join('');
+
+      if (inputSelect) {
+        const savedVal = inputSelect.value || 'default';
+        inputSelect.innerHTML = tenantOptions;
+        if (tenants.some(t => t.tenant_id === savedVal)) inputSelect.value = savedVal;
+      }
+
+      if (editSelect) {
+        const savedVal = editSelect.value || 'default';
+        editSelect.innerHTML = tenantOptions;
+        if (tenants.some(t => t.tenant_id === savedVal)) editSelect.value = savedVal;
+      }
+    }
+
+    window.filterByTenant = function(tenantId) {
+      currentTenantFilter = tenantId;
+      const sel = document.getElementById('admin-tenant-filter');
+      if (sel) sel.value = tenantId;
+      Toast.info(`已切换至租户 [${tenantId}] 数据隔离空间`);
+      document.querySelector('.mobile-tab-btn[data-tab="tab-orders"]').click();
+      loadAllData();
+    };
+
+    window.deleteTenant = async function(tenantId) {
+      if (!confirm(`确定要删除租户 [${tenantId}] 吗？\n注意：此操作将删除该专区的所有隔离配置`)) return;
+      Loading.show('正在删除租户...');
+      try {
+        await adminRequest(`/api/admin/tenants/${tenantId}`, { method: 'DELETE' });
+        Loading.hide();
+        Toast.success('租户删除成功');
+        loadTenants();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '删除失败');
+      }
+    };
+
+    document.getElementById('btn-open-create-tenant')?.addEventListener('click', () => {
+      document.getElementById('card-create-tenant').style.display = 'block';
+      document.getElementById('new-tenant-id').focus();
+    });
+    document.getElementById('btn-close-create-tenant')?.addEventListener('click', () => {
+      document.getElementById('card-create-tenant').style.display = 'none';
+    });
+    document.getElementById('btn-cancel-create-tenant')?.addEventListener('click', () => {
+      document.getElementById('card-create-tenant').style.display = 'none';
+    });
+    document.getElementById('btn-refresh-tenants')?.addEventListener('click', () => {
+      loadTenants();
+      Toast.info('租户列表已刷新');
+    });
+
+    document.getElementById('create-tenant-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const tenant_id = document.getElementById('new-tenant-id').value.trim().toLowerCase();
+      const name = document.getElementById('new-tenant-name').value.trim();
+      const description = document.getElementById('new-tenant-desc').value.trim();
+      const upstream_url = document.getElementById('new-tenant-upstream').value.trim();
+
+      if (!tenant_id || !name) return Toast.error('请填写租户ID和专区全称');
+
+      Loading.show('正在创建新租户空间...');
+      try {
+        await adminRequest('/api/admin/tenants', {
+          method: 'POST',
+          body: JSON.stringify({ tenant_id, name, description, upstream_url: upstream_url || null })
+        });
+        Loading.hide();
+        Toast.success(`🎉 租户 [${name}] 创建成功！专属路由 /t/${tenant_id}/ 已即刻生效`);
+        document.getElementById('create-tenant-form').reset();
+        document.getElementById('card-create-tenant').style.display = 'none';
+        loadTenants();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '创建失败');
       }
     });
 

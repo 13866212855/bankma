@@ -97,23 +97,40 @@ router.post('/parse', async (req, res, next) => {
 
 /**
  * GET /api/merchant/active 或 /api/qrcode/active
- * 获取前端当前主推展示的收款二维码
+ * 获取前端当前主推展示的收款二维码 (按租户 tenant_id 隔离)
  */
 router.get(['/active', '/merchant/active'], async (req, res, next) => {
   try {
+    const tenantId = req.tenantId || 'default';
+
+    // 优先根据租户查找激活的收款码
     let result = await query(
-      `SELECT id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at 
+      `SELECT id, tenant_id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at 
        FROM merchant_qrcodes 
-       WHERE is_active = true 
+       WHERE tenant_id = $1 AND is_active = true 
        ORDER BY id DESC 
-       LIMIT 1`
+       LIMIT 1`,
+      [tenantId]
     );
 
-    // 如果没有激活的，则取最新的一条
+    // 如果当前租户没有激活的，尝试查找当前租户最新一条
     if (result.rows.length === 0) {
       result = await query(
-        `SELECT id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at 
+        `SELECT id, tenant_id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at 
          FROM merchant_qrcodes 
+         WHERE tenant_id = $1 
+         ORDER BY id DESC 
+         LIMIT 1`,
+        [tenantId]
+      );
+    }
+
+    // 若依然没有，安全回退到系统中任一有效码
+    if (result.rows.length === 0 && tenantId !== 'default') {
+      result = await query(
+        `SELECT id, tenant_id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at 
+         FROM merchant_qrcodes 
+         WHERE is_active = true 
          ORDER BY id DESC 
          LIMIT 1`
       );
@@ -141,6 +158,7 @@ router.get(['/active', '/merchant/active'], async (req, res, next) => {
       message: '获取成功',
       data: {
         id: item.id,
+        tenant_id: item.tenant_id,
         merchant_name: item.merchant_name,
         product_name: item.product_name,
         amount: parseFloat(item.amount || 0),
@@ -161,15 +179,37 @@ router.get(['/active', '/merchant/active'], async (req, res, next) => {
 
 /**
  * GET /api/merchant/qrcodes 或 /api/qrcode/merchant/qrcodes
- * 获取所有商家收款码列表（用于前台自由切换通道与测试）
+ * 获取所有商家收款码列表（按租户隔离，支持自由切换通道与测试）
  */
 router.get(['/qrcodes', '/merchant/qrcodes'], async (req, res, next) => {
   try {
-    const result = await query(
-      `SELECT id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at 
-       FROM merchant_qrcodes 
-       ORDER BY is_active DESC, id ASC`
-    );
+    const tenantId = req.tenantId || 'default';
+    const showAll = req.query.all === 'true';
+
+    let result;
+    if (showAll) {
+      result = await query(
+        `SELECT id, tenant_id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at 
+         FROM merchant_qrcodes 
+         ORDER BY is_active DESC, id ASC`
+      );
+    } else {
+      result = await query(
+        `SELECT id, tenant_id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at 
+         FROM merchant_qrcodes 
+         WHERE tenant_id = $1
+         ORDER BY is_active DESC, id ASC`,
+        [tenantId]
+      );
+      if (result.rows.length === 0 && tenantId !== 'default') {
+        result = await query(
+          `SELECT id, tenant_id, merchant_name, product_name, amount, fee_rate, max_limit, min_limit, channel_desc, qr_content, qr_image_url, is_active, created_at 
+           FROM merchant_qrcodes 
+           WHERE tenant_id = 'default'
+           ORDER BY is_active DESC, id ASC`
+        );
+      }
+    }
 
     // 若未生成图片则补充生成 DataURL
     const list = await Promise.all(result.rows.map(async (item) => {
@@ -182,6 +222,7 @@ router.get(['/qrcodes', '/merchant/qrcodes'], async (req, res, next) => {
       }
       return {
         id: item.id,
+        tenant_id: item.tenant_id,
         merchant_name: item.merchant_name,
         product_name: item.product_name,
         amount: parseFloat(item.amount || 0),
@@ -208,11 +249,12 @@ router.get(['/qrcodes', '/merchant/qrcodes'], async (req, res, next) => {
 
 /**
  * POST /api/merchant/qrcode
- * 后台上传/录入收款二维码（含商品信息）
+ * 后台上传/录入收款二维码（支持指定租户）
  */
 router.post(['/qrcode', '/merchant/qrcode'], async (req, res, next) => {
   try {
-    const { merchant_name, product_name, amount, qr_content } = req.body;
+    const { merchant_name, product_name, amount, qr_content, tenant_id } = req.body;
+    const targetTenant = tenant_id || req.tenantId || 'default';
 
     if (!merchant_name || !product_name || !amount || !qr_content) {
       return res.status(400).json({
@@ -238,15 +280,16 @@ router.post(['/qrcode', '/merchant/qrcode'], async (req, res, next) => {
     });
 
     const result = await query(
-      `INSERT INTO merchant_qrcodes (merchant_name, product_name, amount, qr_content, qr_image_url)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO merchant_qrcodes (tenant_id, merchant_name, product_name, amount, qr_content, qr_image_url)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (qr_content) DO UPDATE 
-       SET merchant_name = EXCLUDED.merchant_name,
+       SET tenant_id = EXCLUDED.tenant_id,
+           merchant_name = EXCLUDED.merchant_name,
            product_name = EXCLUDED.product_name,
            amount = EXCLUDED.amount,
            qr_image_url = EXCLUDED.qr_image_url
        RETURNING *`,
-      [merchant_name.trim(), product_name.trim(), numAmount, qr_content.trim(), qrImageUrl]
+      [targetTenant, merchant_name.trim(), product_name.trim(), numAmount, qr_content.trim(), qrImageUrl]
     );
 
     return res.json({
