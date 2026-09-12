@@ -231,11 +231,6 @@ async function initDatabase() {
       `, [t.tenant_id, t.name, t.description, t.upstream_url, JSON.stringify(t.config)]);
     }
     console.log('[DB] 预置多租户 (default, ccb, ahrcu, icbc) 检验就绪');
-
-    // 将历史收款码自动归集到对应租户
-    await query(`UPDATE merchant_qrcodes SET tenant_id = 'ccb' WHERE merchant_name ILIKE '%建设银行%' AND (tenant_id IS NULL OR tenant_id = 'default')`);
-    await query(`UPDATE merchant_qrcodes SET tenant_id = 'ahrcu' WHERE merchant_name ILIKE '%安徽农金%' AND (tenant_id IS NULL OR tenant_id = 'default')`);
-    await query(`UPDATE merchant_qrcodes SET tenant_id = 'icbc' WHERE merchant_name ILIKE '%工商银行%' AND (tenant_id IS NULL OR tenant_id = 'default')`);
   } catch (tErr) {
     console.warn('[DB] 预置租户数据警告:', tErr.message);
   }

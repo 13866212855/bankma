@@ -456,6 +456,7 @@ router.put('/qrcode/:id', requireAdmin, async (req, res, next) => {
     }
 
     const {
+      tenant_id,
       merchant_name,
       product_name,
       amount,
@@ -471,6 +472,7 @@ router.put('/qrcode/:id', requireAdmin, async (req, res, next) => {
       return res.status(400).json({ code: 400, message: '商户名称为必填项' });
     }
 
+    const targetTenant = (tenant_id || 'default').trim().toLowerCase();
     const numAmount = parseFloat(amount !== undefined ? amount : 0);
     const numFeeRate = parseFloat(fee_rate !== undefined ? fee_rate : 0.8);
     const numMaxLimit = parseFloat(max_limit !== undefined ? max_limit : 10000);
@@ -484,9 +486,9 @@ router.put('/qrcode/:id', requireAdmin, async (req, res, next) => {
       return res.status(400).json({ code: 400, message: '单笔最高限额必须大于0' });
     }
 
-    // 若设为当前主推展示码，先将其余置为 false
+    // 若设为当前主推展示码，先将同租户下的其余置为 false
     if (is_active) {
-      await query(`UPDATE merchant_qrcodes SET is_active = false WHERE id != $1`, [id]);
+      await query(`UPDATE merchant_qrcodes SET is_active = false WHERE tenant_id = $1 AND id != $2`, [targetTenant, id]);
     }
 
     let updateQuery;
@@ -496,19 +498,21 @@ router.put('/qrcode/:id', requireAdmin, async (req, res, next) => {
       // 换了新图片
       updateQuery = `
         UPDATE merchant_qrcodes
-        SET merchant_name = $1,
-            product_name = $2,
-            amount = $3,
-            fee_rate = $4,
-            max_limit = $5,
-            min_limit = $6,
-            channel_desc = $7,
-            qr_image_url = $8,
-            is_active = $9
-        WHERE id = $10
+        SET tenant_id = $1,
+            merchant_name = $2,
+            product_name = $3,
+            amount = $4,
+            fee_rate = $5,
+            max_limit = $6,
+            min_limit = $7,
+            channel_desc = $8,
+            qr_image_url = $9,
+            is_active = $10
+        WHERE id = $11
         RETURNING *
       `;
       queryParams = [
+        targetTenant,
         merchant_name.trim(),
         (product_name || '扫码加款收款通道').trim(),
         numAmount,
@@ -524,18 +528,20 @@ router.put('/qrcode/:id', requireAdmin, async (req, res, next) => {
       // 保持原有图片
       updateQuery = `
         UPDATE merchant_qrcodes
-        SET merchant_name = $1,
-            product_name = $2,
-            amount = $3,
-            fee_rate = $4,
-            max_limit = $5,
-            min_limit = $6,
-            channel_desc = $7,
-            is_active = $8
-        WHERE id = $9
+        SET tenant_id = $1,
+            merchant_name = $2,
+            product_name = $3,
+            amount = $4,
+            fee_rate = $5,
+            max_limit = $6,
+            min_limit = $7,
+            channel_desc = $8,
+            is_active = $9
+        WHERE id = $10
         RETURNING *
       `;
       queryParams = [
+        targetTenant,
         merchant_name.trim(),
         (product_name || '扫码加款收款通道').trim(),
         numAmount,
@@ -565,7 +571,7 @@ router.put('/qrcode/:id', requireAdmin, async (req, res, next) => {
 
 /**
  * PUT /api/admin/qrcode/:id/set-active
- * 将指定二维码设为前端展示的主收款码
+ * 将指定二维码设为前端展示的主收款码 (作用域限定在同租户空间)
  */
 router.put('/qrcode/:id/set-active', requireAdmin, async (req, res, next) => {
   try {
@@ -574,8 +580,15 @@ router.put('/qrcode/:id/set-active', requireAdmin, async (req, res, next) => {
       return res.status(400).json({ code: 400, message: '无效的二维码 ID' });
     }
 
-    // 将其他二维码全部置为 false
-    await query(`UPDATE merchant_qrcodes SET is_active = false`);
+    // 先查询当前收款码所属租户
+    const checkRes = await query('SELECT tenant_id FROM merchant_qrcodes WHERE id = $1', [id]);
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ code: 404, message: '未找到指定二维码' });
+    }
+    const currentTenant = checkRes.rows[0].tenant_id || 'default';
+
+    // 仅将同租户下的其他收款码置为 false
+    await query(`UPDATE merchant_qrcodes SET is_active = false WHERE tenant_id = $1`, [currentTenant]);
 
     // 将选中的二维码置为 true
     const result = await query(

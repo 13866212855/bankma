@@ -1066,7 +1066,10 @@
               <div class="qr-card-meta">
                 <div class="qr-card-merchant">${item.merchant_name}</div>
                 <div class="qr-card-desc">${item.channel_desc || '商户收款码'}</div>
-                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;">
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; align-items: center;">
+                  <span style="font-size: 10px; font-weight: 700; background: #EEF2FF; color: #4338CA; border: 1px solid #C7D2FE; border-radius: 4px; padding: 2px 6px;">
+                    ${item.tenant_id === 'default' ? '🌐 默认总台 (default)' : `🏢 专区: ${item.tenant_id}`}
+                  </span>
                   <span class="badge-fee">费率: ${item.fee_rate}%</span>
                   <span class="badge-limit">限额: ${item.min_limit || 1}~${item.max_limit || 10000}元</span>
                 </div>
