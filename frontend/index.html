@@ -970,6 +970,31 @@
     });
 
     document.addEventListener('DOMContentLoaded', async () => {
+      // 1. 初始化客户端唯一身份标识，确保数据完全隔离
+      const user = await StateService.initUser();
+
+      // 2. 尝试拉取当前用户在服务端的独立收款偏好
+      try {
+        if (user && user.id) {
+          const res = await API.get(`/user/config/${user.id}`);
+          if (res && res.configs && res.configs.length > 0) {
+            const defaultCfg = res.configs.find(c => c.is_default) || res.configs[0];
+            if (defaultCfg) {
+              UserPreferenceService.saveMethod(defaultCfg.method);
+              if (defaultCfg.method === 'wechat') {
+                UserPreferenceService.saveAccountDetails('wechat', { account: defaultCfg.account, real_name: defaultCfg.real_name });
+              } else if (defaultCfg.method === 'alipay') {
+                UserPreferenceService.saveAccountDetails('alipay', { account: defaultCfg.account, real_name: defaultCfg.real_name });
+              } else if (defaultCfg.method === 'bank') {
+                UserPreferenceService.saveBankCard({ account: defaultCfg.account, bank_name: defaultCfg.bank_name, real_name: defaultCfg.real_name });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('同步云端专属收款配置:', e);
+      }
+
       loadUserPreferences();
       await loadQRCodes();
     });

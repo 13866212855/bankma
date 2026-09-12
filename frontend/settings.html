@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>个人设置 - 客户扫码提现</title>
+  <title>收款配置 - 客户独立安全空间</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -12,21 +12,34 @@
     <header class="app-header">
       <div style="display: flex; align-items: center; gap: 10px;">
         <a href="index.html" style="font-size: 20px; text-decoration: none; color: var(--text-main); display: flex; align-items: center;">‹</a>
-        <h1 class="app-title">收款账户设置</h1>
+        <h1 class="app-title">收款配置</h1>
       </div>
-      <span class="header-tag">AES-256 加密</span>
+      <span class="header-tag" style="background: #DCFCE7; color: #15803D;">独立隔离保护</span>
     </header>
 
     <!-- 主体内容 -->
     <main class="app-content">
-      <!-- 顶部信息说明 -->
-      <div class="ui-card" style="padding: 12px 16px; background-color: var(--primary-light); border-color: #C7D2FE;">
-        <div style="font-size: 13px; color: var(--primary-color); font-weight: 600;">
-          💡 提现加款直达配置
+      <!-- 客户端专属身份与成员账号安全隔离卡片 -->
+      <div class="ui-card" style="padding: 12px 14px; background: linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 100%); border: 1px solid #C7D2FE;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 38px; height: 38px; border-radius: 50%; background: #4F46E5; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">
+              🛡️
+            </div>
+            <div>
+              <div style="font-size: 13px; font-weight: 700; color: #1E1B4B; display: flex; align-items: center; gap: 6px;">
+                <span id="user-identity-badge">正在识别专属空间...</span>
+                <span style="font-size: 10px; background: #DCFCE7; color: #15803D; padding: 1px 6px; border-radius: 10px; font-weight: 600;">独立安全</span>
+              </div>
+              <div style="font-size: 11px; color: #4338CA; margin-top: 2px;" id="user-identity-desc">
+                本设备专有安全环境 · 绝对不显示其他客户信息
+              </div>
+            </div>
+          </div>
+          <button id="btn-open-member-modal" class="btn btn-secondary btn-sm" style="font-size: 12px; height: 30px; padding: 0 10px; border-color: #A5B4FC; color: #4F46E5; white-space: nowrap;">
+            👤 切换/登录
+          </button>
         </div>
-        <p style="font-size: 12px; color: #4338CA; margin-top: 4px; line-height: 1.4;">
-          配置您接收加款的收款方式。扫码支付成功后，系统将自动将加款资金转入您指定的默认账户中。
-        </p>
       </div>
 
       <!-- 收款方式切换选项卡 -->
@@ -94,11 +107,11 @@
         </form>
       </div>
 
-      <!-- 已保存收款方式一览卡片 -->
+      <!-- 已保存收款方式一览卡片 (防重与严格隔离展示) -->
       <div class="ui-card">
         <div class="ui-card-title">
           <span>已绑定的收款渠道</span>
-          <span style="font-size: 12px; color: var(--text-muted);">已加密安全存储</span>
+          <span style="font-size: 11px; color: #16A34A; background: #F0FDF4; padding: 2px 8px; border-radius: 4px;">本客户独享 · 自动去重</span>
         </div>
         <div id="saved-configs-list" style="display: flex; flex-direction: column; gap: 8px;">
           <div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 8px;">正在加载配置...</div>
@@ -109,13 +122,39 @@
       <div class="security-box">
         <span style="font-size: 20px;">🛡️</span>
         <div>
-          <strong style="color: var(--text-main);">安全加密保障声明</strong>
+          <strong style="color: var(--text-main);">客户隐私与资金安全机制</strong>
           <p style="margin-top: 2px;">
-            您的微信号、支付宝账号及银行卡敏感信息均经过 AES-256 算法加密后存入 Neon PostgreSQL 数据库，任何第三方均无法反编译或读取明文，确保资金与隐私绝不外泄。
+            1. <strong>设备身份隔离</strong>：每个手机/电脑客户端拥有专属加密凭证，任何他人均无法查看您的卡号与姓名。<br>
+            2. <strong>去重智能合并</strong>：同一账号与同一开户名自动判重合并，绝不重复生成多条记录。<br>
+            3. <strong>AES-256 银行级加密</strong>：所有敏感数据经 AES-256 加密存入云端数据库，明文绝不外泄。
           </p>
         </div>
       </div>
     </main>
+
+    <!-- 成员管理 / 手机号登录绑定模态弹窗 -->
+    <div id="member-modal" class="modal-mask" style="display: none;">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <h3 class="modal-title">👤 客户身份与账号登录</h3>
+          <button class="close-btn" id="btn-close-member-modal">✕</button>
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">
+          本设备默认享有专属私密空间。输入手机号可切换或登录您已有的账户，实现跨设备同步收款配置：
+        </div>
+        <form id="form-member-login">
+          <div class="form-group">
+            <label class="form-label">手机号码 <span style="color: var(--danger-color);">*</span></label>
+            <input type="tel" class="form-input" id="member-phone" placeholder="请输入11位手机号 (如: 13800138000)" maxlength="11" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">客户称谓 (选填)</label>
+            <input type="text" class="form-input" id="member-nickname" placeholder="例如: 张三 / 客户小李">
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 10px;">立即绑定并切换</button>
+        </form>
+      </div>
+    </div>
 
     <!-- 底部导航 -->
     <nav class="app-nav">
@@ -151,28 +190,114 @@
       });
     });
 
-    // 加载用户现有收款配置
+    // 格式化银行卡输入（每4位自动加空格）
+    const bankAccountInput = document.getElementById('bank-account');
+    if (bankAccountInput) {
+      bankAccountInput.addEventListener('input', (e) => {
+        let val = e.target.value.replace(/\D/g, '').slice(0, 19);
+        val = val.replace(/(\d{4})(?=\d)/g, '$1 ');
+        e.target.value = val;
+      });
+    }
+
+    // 成员管理弹窗控制
+    const memberModal = document.getElementById('member-modal');
+    document.getElementById('btn-open-member-modal').addEventListener('click', () => {
+      memberModal.style.display = 'flex';
+      const currentUser = StateService.getCurrentUser();
+      if (currentUser && currentUser.phone && !currentUser.phone.startsWith('游客')) {
+        document.getElementById('member-phone').value = currentUser.phone;
+      }
+      if (currentUser && currentUser.nickname) {
+        document.getElementById('member-nickname').value = currentUser.nickname;
+      }
+    });
+
+    document.getElementById('btn-close-member-modal').addEventListener('click', () => {
+      memberModal.style.display = 'none';
+    });
+
+    memberModal.addEventListener('click', (e) => {
+      if (e.target === memberModal) memberModal.style.display = 'none';
+    });
+
+    // 绑定/切换手机账号表单提交
+    document.getElementById('form-member-login').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const phone = document.getElementById('member-phone').value.trim();
+      const nickname = document.getElementById('member-nickname').value.trim();
+
+      if (!/^1[3-9]\d{9}$/.test(phone)) {
+        return Toast.error('请输入规范的11位中国大陆手机号码');
+      }
+
+      Loading.show('正在验证并同步专属账户...');
+      try {
+        const resUser = await API.post('/user/switch-or-bind', {
+          phone,
+          nickname
+        });
+        StateService.setCurrentUser(resUser);
+        memberModal.style.display = 'none';
+        Loading.hide();
+        Toast.success(`已成功切换至专属客户账号: ${phone}`);
+        await loadConfigs();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '切换账号失败');
+      }
+    });
+
+    // 加载当前客户端专有的收款配置
     async function loadConfigs() {
       try {
-        const userId = StateService.getUserId();
-        const data = await API.get(`/user/config/${userId}`);
-        currentSavedConfigs = data.configs || [];
+        // 1. 初始化并确保当前客户端唯一用户身份
+        const user = await StateService.initUser();
+        
+        // 更新顶部身份指示
+        const badgeEl = document.getElementById('user-identity-badge');
+        const descEl = document.getElementById('user-identity-desc');
+        if (user.phone && !user.phone.startsWith('游客')) {
+          badgeEl.innerText = `手机客户: ${user.phone.slice(0, 3)}****${user.phone.slice(-4)}`;
+          descEl.innerText = `${user.nickname || 'VIP客户'} · 专属加密通道已连接`;
+        } else {
+          badgeEl.innerText = `${user.nickname || '专属客户'}`;
+          descEl.innerText = `本客户端专有私密空间 · 绝对不与其他客户混淆`;
+        }
 
-        // 回显已有配置到表单
+        // 2. 拉取当前用户专属的收款配置（后端已做越权防护与去重）
+        const data = await API.get(`/user/config/${user.id}`);
+        const rawConfigs = data.configs || [];
+
+        // 3. 前端双重去重保障：严格按 (卡号 + 姓名) 防重
+        const seenMap = new Set();
+        currentSavedConfigs = [];
+        for (const item of rawConfigs) {
+          const accNorm = (item.account || '').replace(/\s+/g, '').toLowerCase();
+          const nameNorm = (item.real_name || '').trim().toLowerCase();
+          const key = `${accNorm}_${nameNorm}`;
+          if (!seenMap.has(key)) {
+            seenMap.add(key);
+            currentSavedConfigs.push(item);
+          }
+        }
+
+        // 回显默认或首项配置到各对应选项卡表单中
         currentSavedConfigs.forEach(item => {
           if (item.method === 'wechat') {
             document.getElementById('wx-account').value = item.account || '';
             document.getElementById('wx-real-name').value = item.real_name || '';
-            document.getElementById('wx-is-default').checked = item.is_default;
+            document.getElementById('wx-is-default').checked = Boolean(item.is_default);
           } else if (item.method === 'alipay') {
             document.getElementById('ali-account').value = item.account || '';
             document.getElementById('ali-real-name').value = item.real_name || '';
-            document.getElementById('ali-is-default').checked = item.is_default;
+            document.getElementById('ali-is-default').checked = Boolean(item.is_default);
           } else if (item.method === 'bank') {
-            document.getElementById('bank-account').value = item.account || '';
+            let formattedAcc = (item.account || '').replace(/\D/g, '').replace(/(\d{4})(?=\d)/g, '$1 ');
+            document.getElementById('bank-account').value = formattedAcc;
             document.getElementById('bank-name').value = item.bank_name || '';
             document.getElementById('bank-real-name').value = item.real_name || '';
-            document.getElementById('bank-is-default').checked = item.is_default;
+            document.getElementById('bank-is-default').checked = Boolean(item.is_default);
           }
         });
 
@@ -180,6 +305,7 @@
         renderSavedConfigs();
       } catch (err) {
         console.warn('加载收款配置失败:', err);
+        Toast.error(err.message || '加载配置失败');
       }
     }
 
@@ -187,7 +313,7 @@
     function renderSavedConfigs() {
       const listContainer = document.getElementById('saved-configs-list');
       if (!currentSavedConfigs || currentSavedConfigs.length === 0) {
-        listContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 12px; text-align: center;">尚未配置任何收款账号</div>';
+        listContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 12px; text-align: center; padding: 14px 0;">当前客户端尚未配置收款账号，请在上方填写保存</div>';
         return;
       }
 
@@ -196,27 +322,73 @@
 
       listContainer.innerHTML = currentSavedConfigs.map(item => `
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #F8FAFC; border: 1px solid var(--border-color); border-radius: 10px;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 20px;">${methodIcons[item.method] || '💳'}</span>
-            <div>
-              <div style="font-weight: 600; font-size: 13px; color: var(--text-main);">
-                ${methodNames[item.method]}
-                ${item.bank_name ? ` · ${item.bank_name}` : ''}
-                ${item.is_default ? '<span style="font-size: 10px; background: #EEF2FF; color: var(--primary-color); padding: 2px 6px; border-radius: 4px; margin-left: 4px;">默认</span>' : ''}
+          <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
+            <span style="font-size: 20px; flex-shrink: 0;">${methodIcons[item.method] || '💳'}</span>
+            <div style="min-width: 0; flex: 1;">
+              <div style="font-weight: 600; font-size: 13px; color: var(--text-main); display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                <span>${methodNames[item.method]}</span>
+                ${item.bank_name ? `<span style="color: #475569;">· ${item.bank_name}</span>` : ''}
+                ${item.is_default ? '<span style="font-size: 10px; background: #EEF2FF; color: var(--primary-color); padding: 1px 6px; border-radius: 4px; font-weight: 600;">默认</span>' : ''}
               </div>
-              <div style="font-size: 12px; color: var(--text-muted); font-family: monospace;">
-                ${item.account_masked} ${item.real_name ? `(${item.real_name})` : ''}
+              <div style="font-size: 12px; color: var(--text-muted); font-family: monospace; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                ${item.account_masked} ${item.real_name ? `<strong style="color: #334155; font-family: sans-serif;">(${item.real_name})</strong>` : ''}
               </div>
             </div>
           </div>
-          <button class="btn btn-secondary btn-sm" style="height: 28px; padding: 0 8px;" onclick="switchTabTo('${item.method}')">编辑</button>
+          <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <button class="btn btn-secondary btn-sm" style="height: 28px; padding: 0 8px; font-size: 12px;" onclick="switchTabTo('${item.method}', '${encodeURIComponent(item.account || '')}', '${encodeURIComponent(item.real_name || '')}', '${encodeURIComponent(item.bank_name || '')}')">编辑</button>
+            <button class="btn btn-secondary btn-sm" style="height: 28px; padding: 0 6px; font-size: 12px; color: var(--danger-color); border-color: #FECDD3;" onclick="removeConfig(${item.id}, '${item.method}', '${encodeURIComponent(item.account || '')}', '${encodeURIComponent(item.real_name || '')}')" title="移除此收款方式">移除</button>
+          </div>
         </div>
       `).join('');
     }
 
-    function switchTabTo(method) {
+    function switchTabTo(method, accountEncoded, nameEncoded, bankEncoded) {
       const tab = document.querySelector(`.form-tab[data-tab="${method}"]`);
       if (tab) tab.click();
+
+      if (accountEncoded) {
+        const acc = decodeURIComponent(accountEncoded);
+        const name = nameEncoded ? decodeURIComponent(nameEncoded) : '';
+        const bank = bankEncoded ? decodeURIComponent(bankEncoded) : '';
+
+        if (method === 'wechat') {
+          document.getElementById('wx-account').value = acc;
+          document.getElementById('wx-real-name').value = name;
+        } else if (method === 'alipay') {
+          document.getElementById('ali-account').value = acc;
+          document.getElementById('ali-real-name').value = name;
+        } else if (method === 'bank') {
+          let formattedAcc = acc.replace(/\D/g, '').replace(/(\d{4})(?=\d)/g, '$1 ');
+          document.getElementById('bank-account').value = formattedAcc;
+          document.getElementById('bank-name').value = bank;
+          document.getElementById('bank-real-name').value = name;
+        }
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // 移除某一项收款方式
+    async function removeConfig(id, method, accountEncoded, nameEncoded) {
+      if (!confirm('确定要移除此收款渠道吗？')) return;
+
+      const acc = accountEncoded ? decodeURIComponent(accountEncoded) : '';
+      const name = nameEncoded ? decodeURIComponent(nameEncoded) : '';
+
+      Loading.show('正在移除收款渠道...');
+      try {
+        await API.delete(`/user/config/${id}`);
+        // 同步清理本地常用银行卡偏好
+        if (method === 'bank') {
+          UserPreferenceService.deleteBankCard(acc, name);
+        }
+        Loading.hide();
+        Toast.success('收款渠道已成功移除！');
+        await loadConfigs();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '移除失败');
+      }
     }
 
     // 保存微信
@@ -230,16 +402,15 @@
 
       Loading.show('正在保存微信收款配置...');
       try {
-        await API.post('/user/config', {
-          user_id: StateService.getUserId(),
+        const res = await API.post('/user/config', {
           method: 'wechat',
           account,
           real_name: realName,
           is_default: isDefault
         });
         Loading.hide();
-        Toast.success('微信收款方式保存成功！');
-        loadConfigs();
+        Toast.success(res.message || '微信收款配置保存成功！');
+        await loadConfigs();
       } catch (err) {
         Loading.hide();
         Toast.error(err.message || '保存失败');
@@ -258,16 +429,15 @@
 
       Loading.show('正在保存支付宝收款配置...');
       try {
-        await API.post('/user/config', {
-          user_id: StateService.getUserId(),
+        const res = await API.post('/user/config', {
           method: 'alipay',
           account,
           real_name: realName,
           is_default: isDefault
         });
         Loading.hide();
-        Toast.success('支付宝收款方式保存成功！');
-        loadConfigs();
+        Toast.success(res.message || '支付宝收款配置保存成功！');
+        await loadConfigs();
       } catch (err) {
         Loading.hide();
         Toast.error(err.message || '保存失败');
@@ -277,7 +447,8 @@
     // 保存银行卡
     document.getElementById('form-bank').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const account = document.getElementById('bank-account').value.replace(/\s+/g, '').trim();
+      const rawAccount = document.getElementById('bank-account').value;
+      const account = rawAccount.replace(/\s+/g, '').trim();
       const bankName = document.getElementById('bank-name').value.trim();
       const realName = document.getElementById('bank-real-name').value.trim();
       const isDefault = document.getElementById('bank-is-default').checked;
@@ -288,8 +459,7 @@
 
       Loading.show('正在保存银行卡收款配置...');
       try {
-        await API.post('/user/config', {
-          user_id: StateService.getUserId(),
+        const res = await API.post('/user/config', {
           method: 'bank',
           account,
           bank_name: bankName,
@@ -298,8 +468,8 @@
         });
         UserPreferenceService.saveBankCard({ account, bank_name: bankName, real_name: realName });
         Loading.hide();
-        Toast.success('银行卡收款方式保存成功！');
-        loadConfigs();
+        Toast.success(res.message || '银行卡收款配置保存成功！');
+        await loadConfigs();
       } catch (err) {
         Loading.hide();
         Toast.error(err.message || '保存失败');

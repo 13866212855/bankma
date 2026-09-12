@@ -59,13 +59,19 @@ async function getClient() {
 async function initDatabase() {
   console.log('[DB] 开始检查并初始化数据库表结构...');
 
-  // 1. 用户表
+  // 1. 用户表 (支持基于客户端设备唯一标识 client_token 隔离与手机号绑定登录)
   await query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
-      phone VARCHAR(20) UNIQUE NOT NULL,
+      client_token VARCHAR(100) UNIQUE,
+      phone VARCHAR(50),
+      nickname VARCHAR(100),
       created_at TIMESTAMP DEFAULT NOW()
     );
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS client_token VARCHAR(100);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname VARCHAR(100);
+    ALTER TABLE users ALTER COLUMN phone DROP NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_client_token ON users(client_token) WHERE client_token IS NOT NULL;
   `);
 
   // 2. 用户收款配置表

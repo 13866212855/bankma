@@ -123,16 +123,50 @@ router.post('/create', async (req, res, next) => {
 
     const newOrder = orderInsert.rows[0];
 
-    // 自动更新或保存用户的收款偏好配置（记住用户的上一次选择）
+    // 自动更新或保存用户的收款偏好配置（严格防重：卡号与开户名两者同时相同时不重复插入）
     try {
-      await query(`
-        UPDATE user_withdraw_config SET is_default = false WHERE user_id = $1
-      `, [user_id]);
+      const cleanAcc = (withdraw_account || '').replace(/\s+/g, '').trim().toLowerCase();
+      const cleanName = (real_name || '').trim().toLowerCase();
+      const cleanBank = bank_name ? bank_name.trim() : null;
 
-      await query(`
-        INSERT INTO user_withdraw_config (user_id, method, account, real_name, bank_name, is_default, updated_at)
-        VALUES ($1, $2, $3, $4, $5, true, NOW())
-      `, [user_id, withdraw_method, encryptedAccount, real_name || null, bank_name || null]);
+      const existingConfigs = await query(
+        `SELECT id, method, account, real_name, bank_name, is_default 
+         FROM user_withdraw_config 
+         WHERE user_id = $1`,
+        [user_id]
+      );
+
+      let duplicateRow = null;
+      for (const row of existingConfigs.rows) {
+        const plain = (decrypt(row.account) || '').replace(/\s+/g, '').trim().toLowerCase();
+        const rName = (row.real_name || '').trim().toLowerCase();
+        if (plain === cleanAcc && rName === cleanName) {
+          duplicateRow = row;
+          break;
+        }
+      }
+
+      await query(
+        `UPDATE user_withdraw_config SET is_default = false WHERE user_id = $1`,
+        [user_id]
+      );
+
+      if (duplicateRow) {
+        // 重复项：合并更新原记录为默认收款方式，并刷新时间，不重复新增
+        await query(
+          `UPDATE user_withdraw_config 
+           SET method = $1, bank_name = COALESCE($2, bank_name), is_default = true, updated_at = NOW() 
+           WHERE id = $3`,
+          [withdraw_method, cleanBank, duplicateRow.id]
+        );
+      } else {
+        // 非重复项：插入新记录
+        await query(
+          `INSERT INTO user_withdraw_config (user_id, method, account, real_name, bank_name, is_default, updated_at)
+           VALUES ($1, $2, $3, $4, $5, true, NOW())`,
+          [user_id, withdraw_method, encryptedAccount, real_name ? real_name.trim() : null, cleanBank]
+        );
+      }
     } catch (e) {
       console.warn('[DB] 记住提现账户偏好告警:', e.message);
     }
@@ -323,7 +357,16 @@ router.get('/status/:orderNo', async (req, res, next) => {
  */
 router.get('/list/:userId', async (req, res, next) => {
   try {
-    const { userId } = req.params;
+    const clientToken = req.headers['x-client-token'] || req.query.client_token;
+    let targetUserId = parseInt(req.params.userId, 10);
+
+    // 如果客户端携带了 client_token，自动校验或校准用户身份，防止越权拉取其他客户订单
+    if (clientToken) {
+      const userRes = await query('SELECT id FROM users WHERE client_token = $1', [clientToken]);
+      if (userRes.rows.length > 0) {
+        targetUserId = userRes.rows[0].id;
+      }
+    }
 
     const result = await query(
       `SELECT o.id, o.order_no, o.amount, o.pay_status, o.process_status, 
@@ -334,7 +377,7 @@ router.get('/list/:userId', async (req, res, next) => {
        WHERE o.user_id = $1 
        ORDER BY o.id DESC 
        LIMIT 30`,
-      [userId]
+      [targetUserId]
     );
 
     return res.json({

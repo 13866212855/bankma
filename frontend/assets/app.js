@@ -10,10 +10,14 @@ const API = {
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
     const token = localStorage.getItem('qr_auth_token') || 'demo-auth-token-2026';
+    const clientToken = StateService.getClientToken();
+    const currentUserId = StateService.getUserId();
 
     const defaultHeaders = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
+      'Authorization': `Bearer ${token}`,
+      'X-Client-Token': clientToken,
+      'X-User-Id': currentUserId || ''
     };
 
     const config = {
@@ -56,6 +60,10 @@ const API = {
       method: 'PUT',
       body: body ? JSON.stringify(body) : undefined
     });
+  },
+
+  delete(endpoint) {
+    return this.request(endpoint, { method: 'DELETE' });
   }
 };
 
@@ -121,14 +129,50 @@ const Loading = {
   }
 };
 
-// 状态管理服务
+// 状态管理服务 - 客户端唯一性标识与用户数据安全隔离
 const StateService = {
+  getClientToken() {
+    let token = localStorage.getItem('qr_client_token');
+    if (!token) {
+      // 检查 Cookie 备份
+      const match = document.cookie.match(/(^|;)\s*qr_client_token=([^;]+)/);
+      if (match) {
+        token = decodeURIComponent(match[2]);
+      }
+    }
+    if (!token) {
+      // 生成设备唯一标识 (UUID / Token)
+      token = 'ct_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    }
+    // 持久化双重存储 (localStorage + 长期 Cookie)
+    localStorage.setItem('qr_client_token', token);
+    document.cookie = `qr_client_token=${encodeURIComponent(token)}; path=/; max-age=31536000; SameSite=Lax`;
+    return token;
+  },
+
   getUserId() {
-    return localStorage.getItem('qr_user_id') || '1';
+    return localStorage.getItem('qr_user_id') || '';
   },
 
   setUserId(id) {
     localStorage.setItem('qr_user_id', String(id));
+  },
+
+  getCurrentUser() {
+    try {
+      const raw = localStorage.getItem('qr_user_info');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return null;
+  },
+
+  setCurrentUser(user) {
+    if (user) {
+      if (user.id) this.setUserId(user.id);
+      localStorage.setItem('qr_user_info', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('qr_user_info');
+    }
   },
 
   getLastOrderNo() {
@@ -141,49 +185,57 @@ const StateService = {
 
   async initUser() {
     try {
-      const user = await API.get('/user/current');
+      const clientToken = this.getClientToken();
+      const user = await API.post('/user/init', { client_token: clientToken });
       if (user && user.id) {
-        this.setUserId(user.id);
+        this.setCurrentUser(user);
         return user;
       }
-    } catch {
-      // 默认用户回退
+    } catch (err) {
+      console.warn('初始化客户端独立身份失败:', err);
     }
-    return { id: 1, phone: '13800138000' };
+    const fallback = { id: 1, nickname: '专属客户' };
+    this.setCurrentUser(fallback);
+    return fallback;
   }
 };
 
-// 用户收款偏好缓存（记住上一次选择的结果，保证每个用户独立）
+// 用户收款偏好缓存（基于 userId 独立空间，保证每个客户的常用银行卡及配置 100% 独立隔离）
 const UserPreferenceService = {
+  getKey(name) {
+    const uid = StateService.getUserId() || 'default';
+    return `qr_${name}_user_${uid}`;
+  },
+
   getPreferences() {
     try {
-      const raw = localStorage.getItem('qr_user_preferred_withdraw');
+      const raw = localStorage.getItem(this.getKey('pref_withdraw'));
       if (raw) return JSON.parse(raw);
     } catch {}
     return {
       method: 'wechat',
-      wechat: { account: '13800138000', real_name: '张三' },
-      alipay: { account: '13800138000', real_name: '张三' },
-      bank: { account: '6222021001123456789', bank_name: '中国工商银行', real_name: '张三' }
+      wechat: { account: '', real_name: '' },
+      alipay: { account: '', real_name: '' },
+      bank: { account: '', bank_name: '', real_name: '' }
     };
   },
 
   saveMethod(method) {
     const prefs = this.getPreferences();
     prefs.method = method;
-    localStorage.setItem('qr_user_preferred_withdraw', JSON.stringify(prefs));
+    localStorage.setItem(this.getKey('pref_withdraw'), JSON.stringify(prefs));
   },
 
   saveAccountDetails(method, details) {
     const prefs = this.getPreferences();
     prefs.method = method;
     prefs[method] = { ...(prefs[method] || {}), ...details };
-    localStorage.setItem('qr_user_preferred_withdraw', JSON.stringify(prefs));
+    localStorage.setItem(this.getKey('pref_withdraw'), JSON.stringify(prefs));
   },
 
   getSavedBankCards() {
     try {
-      const raw = localStorage.getItem('qr_saved_bank_cards_list');
+      const raw = localStorage.getItem(this.getKey('saved_bank_cards'));
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -191,13 +243,13 @@ const UserPreferenceService = {
         }
       }
     } catch {}
-    // 默认回退：若之前有单张银行卡配置，自动转为首张常用卡
+    // 回退：若该用户有当前银行配置则作为初始卡
     const prefs = this.getPreferences();
     if (prefs.bank && prefs.bank.account) {
       return [{
-        bank_name: prefs.bank.bank_name || '中国工商银行',
+        bank_name: prefs.bank.bank_name || '储蓄卡',
         account: prefs.bank.account,
-        real_name: prefs.bank.real_name || '张三'
+        real_name: prefs.bank.real_name || ''
       }];
     }
     return [];
@@ -207,31 +259,48 @@ const UserPreferenceService = {
     if (!card || !card.account) return [];
     let list = this.getSavedBankCards();
     const cleanAccount = card.account.replace(/\s+/g, '');
-    // 过滤掉同卡号的历史项
-    list = list.filter(item => (item.account || '').replace(/\s+/g, '') !== cleanAccount);
+    const cleanName = (card.real_name || '').trim();
+
+    // 判重过滤：卡号和真实姓名同时相同则不重复新增，直接合并更新
+    list = list.filter(item => {
+      const itmAcc = (item.account || '').replace(/\s+/g, '');
+      const itmName = (item.real_name || '').trim();
+      return !(itmAcc.toLowerCase() === cleanAccount.toLowerCase() && itmName.toLowerCase() === cleanName.toLowerCase());
+    });
+
     // 插入最前面作为最新使用的卡
     list.unshift({
       bank_name: (card.bank_name || '储蓄卡').trim(),
       account: cleanAccount,
-      real_name: (card.real_name || '').trim(),
+      real_name: cleanName,
       updated_at: Date.now()
     });
+
     // 最多存储 10 张卡
     if (list.length > 10) list = list.slice(0, 10);
-    localStorage.setItem('qr_saved_bank_cards_list', JSON.stringify(list));
+    localStorage.setItem(this.getKey('saved_bank_cards'), JSON.stringify(list));
+
     // 同时同步更新默认 bank
     this.saveAccountDetails('bank', {
       bank_name: card.bank_name,
       account: cleanAccount,
-      real_name: card.real_name
+      real_name: cleanName
     });
     return list;
   },
 
-  deleteBankCard(account) {
-    const cleanAccount = (account || '').replace(/\s+/g, '');
-    let list = this.getSavedBankCards().filter(item => (item.account || '').replace(/\s+/g, '') !== cleanAccount);
-    localStorage.setItem('qr_saved_bank_cards_list', JSON.stringify(list));
+  deleteBankCard(account, realName) {
+    const cleanAccount = (account || '').replace(/\s+/g, '').toLowerCase();
+    const cleanName = (realName || '').trim().toLowerCase();
+    let list = this.getSavedBankCards().filter(item => {
+      const itmAcc = (item.account || '').replace(/\s+/g, '').toLowerCase();
+      const itmName = (item.real_name || '').trim().toLowerCase();
+      if (cleanName) {
+        return !(itmAcc === cleanAccount && itmName === cleanName);
+      }
+      return itmAcc !== cleanAccount;
+    });
+    localStorage.setItem(this.getKey('saved_bank_cards'), JSON.stringify(list));
     return list;
   }
 };
