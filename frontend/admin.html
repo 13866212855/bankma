@@ -277,13 +277,26 @@
       </div>
 
       <form id="admin-login-form">
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>管理专区 / 租户空间</span>
+            <span style="font-size: 11px; color: #4F46E5; font-weight: 600;">各专区密码独立隔离</span>
+          </label>
+          <select id="login-tenant" class="form-input" style="height: 42px; font-size: 13px; font-weight: 600;">
+            <option value="default">👑 默认超级管理总台 (default)</option>
+            <option value="ccb">建设银行专区 (ccb)</option>
+            <option value="ahrcu">安徽农金专区 (ahrcu)</option>
+            <option value="icbc">工商银行专区 (icbc)</option>
+            <option value="gcxq">合肥高新专区 (gcxq)</option>
+          </select>
+        </div>
         <div class="form-group">
           <label class="form-label">管理员账号</label>
-          <input type="text" id="login-username" class="form-input" placeholder="请输入管理员账号" autocomplete="username" required>
+          <input type="text" id="login-username" class="form-input" placeholder="请输入管理员账号" autocomplete="username" value="admin" required>
         </div>
         <div class="form-group">
           <label class="form-label">管理员密码</label>
-          <input type="password" id="login-password" class="form-input" placeholder="请输入管理员密码" autocomplete="current-password" required>
+          <input type="password" id="login-password" class="form-input" placeholder="请输入该专区管理员密码" autocomplete="current-password" required>
         </div>
 
         <button type="submit" class="btn btn-primary" id="btn-submit-login" style="margin-top: 8px; height: 46px;">
@@ -306,9 +319,13 @@
         <div>
           <h1>管理后台</h1>
         </div>
-        <span class="admin-role-badge">Admin</span>
+        <span id="admin-role-badge" class="admin-role-badge">SuperAdmin</span>
       </div>
       <div class="admin-mobile-actions">
+        <!-- 修改密码入口按钮 (所有后台通用) -->
+        <button type="button" id="btn-open-pwd-modal" class="btn btn-secondary btn-sm" style="height: 30px; font-size: 11px; padding: 0 8px; color: #4F46E5; font-weight: 700; border-color: #C7D2FE;" title="修改当前管理员密码">
+          🔐 改密
+        </button>
         <!-- 多租户切换 (mysingledomain2mul) -->
         <select id="admin-tenant-filter" style="height: 30px; font-size: 11px; padding: 0 6px; border-radius: 6px; border: 1.5px solid #C7D2FE; background: #EEF2FF; color: var(--primary-color); font-weight: 700; outline: none; max-width: 130px;" title="按租户隔离过滤">
           <option value="all">🌐 全域所有租户</option>
@@ -427,7 +444,7 @@
         <button type="button" class="mobile-tab-btn" data-tab="tab-upload">
           <span>📤</span> 上传新码
         </button>
-        <button type="button" class="mobile-tab-btn" data-tab="tab-tenants">
+        <button type="button" class="mobile-tab-btn" id="tab-btn-tenants" data-tab="tab-tenants">
           <span>🏢</span> 多租户专区
         </button>
       </div>
@@ -440,6 +457,32 @@
             <div style="font-size: 11px; color: var(--text-muted);">核验商户流水后向客户微信/支付宝/银行卡打款</div>
           </div>
           <button class="btn btn-secondary btn-sm" id="btn-refresh-orders" style="height: 28px; font-size: 11px; width: auto; padding: 0 10px;">🔄 刷新</button>
+        </div>
+
+        <!-- 超级管理员专享订单删除与批量清理工具条 (注：子租户后台完全无此功能) -->
+        <div id="superadmin-order-toolbar" style="display: none; background: #FFF1F2; border: 1.5px solid #FECDD3; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(225,29,72,0.06);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11.5px; font-weight: 800; color: #9F1239; background: #FFE4E6; padding: 2px 6px; border-radius: 4px;">
+                👑 超管权限
+              </span>
+              <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; color: #881337; font-weight: 700;">
+                <input type="checkbox" id="chk-select-all-orders" style="width: 16px; height: 16px; cursor: pointer; accent-color: #E11D48;">
+                <span>全选</span>
+              </label>
+              <button type="button" id="btn-batch-delete-orders" class="btn btn-sm" style="background: #E11D48; color: #FFF; border: none; font-size: 11px; height: 26px; padding: 0 10px; border-radius: 6px; font-weight: 700; display: none;" onclick="batchDeleteSelectedOrders()">
+                🗑️ 批量删除 (<span id="batch-del-count">0</span>)
+              </button>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button type="button" class="btn btn-sm" style="background: #FFFFFF; color: #BE123C; border: 1.5px solid #FDA4AF; font-size: 11px; height: 26px; padding: 0 10px; border-radius: 6px; font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onclick="openPurgeOrdersModal()">
+                ⚡ 清除所有子租户订单
+              </button>
+            </div>
+          </div>
+          <div style="font-size: 11px; color: #9F1239; margin-top: 4px; line-height: 1.4;">
+            💡 <strong>超管特权说明</strong>：支持单笔删除、多选批量删除或一键清理子租户订单；子租户管理后台受权限隔离保护，无权进行任何订单删除操作。
+          </div>
         </div>
 
         <div id="orders-cards-container">
@@ -698,6 +741,136 @@
           </form>
         </div>
       </div>
+
+      <!-- 1. 修改管理员密码弹窗 Modal (所有后台通用，各租户管理员密码独立互不干扰) -->
+      <div id="modal-change-password" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); z-index: 10000; align-items: center; justify-content: center; padding: 14px; backdrop-filter: blur(2px);">
+        <div style="background: #FFF; width: 100%; max-width: 420px; border-radius: 16px; padding: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E2E8F0; padding-bottom: 10px; margin-bottom: 14px;">
+            <div style="font-size: 16px; font-weight: 700; color: #1E293B; display: flex; align-items: center; gap: 6px;">
+              <span>🔐</span> 修改管理员密码
+            </div>
+            <button type="button" id="btn-close-pwd-modal" style="background: none; border: none; font-size: 22px; color: #64748B; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+          </div>
+
+          <div style="background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 11.5px; color: #3730A3;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+              <span>当前专区: <strong id="pwd-modal-tenant-name">默认超级总台 (default)</strong></span>
+              <span>账号: <strong>admin</strong></span>
+            </div>
+            <div style="color: #4F46E5; margin-top: 2px;">🛡️ 各子租户与总台密码完全独立隔离，修改后即刻生效且仅对当前专区生效。</div>
+          </div>
+
+          <form id="change-pwd-form">
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label class="form-label" style="font-size: 12px;">当前原密码 <span style="color: var(--danger-color);">*</span></label>
+              <input type="password" id="input-old-pwd" class="form-input" placeholder="请输入当前旧密码 (初始为 admin123)" autocomplete="current-password" required style="height: 40px; font-size: 13px;">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label class="form-label" style="font-size: 12px;">设置新密码 <span style="color: var(--danger-color);">*</span></label>
+              <input type="password" id="input-new-pwd" class="form-input" placeholder="请输入新密码 (不少于6位)" autocomplete="new-password" minlength="6" required style="height: 40px; font-size: 13px;">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" style="font-size: 12px;">确认新密码 <span style="color: var(--danger-color);">*</span></label>
+              <input type="password" id="input-confirm-pwd" class="form-input" placeholder="请再次输入新密码" autocomplete="new-password" minlength="6" required style="height: 40px; font-size: 13px;">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+              <button type="button" class="btn btn-secondary" id="btn-cancel-change-pwd" style="flex: 1; height: 40px;">取消</button>
+              <button type="submit" class="btn btn-primary" style="flex: 1.5; height: 40px;">确认修改密码</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- 2. 超级管理员清理/删除子租户订单弹窗 Modal (子租户后台无此权限) -->
+      <div id="modal-purge-orders" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); z-index: 10000; align-items: center; justify-content: center; padding: 14px; backdrop-filter: blur(3px);">
+        <div style="background: #FFF; width: 100%; max-width: 440px; border-radius: 16px; padding: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3);">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #FEE2E2; padding-bottom: 10px; margin-bottom: 14px;">
+            <div style="font-size: 16px; font-weight: 700; color: #991B1B; display: flex; align-items: center; gap: 6px;">
+              <span>🗑️</span> 清除/清理子租户订单
+            </div>
+            <button type="button" id="btn-close-purge-modal" style="background: none; border: none; font-size: 22px; color: #64748B; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+          </div>
+
+          <div style="background: #FFF1F2; border: 1px solid #FECDD3; border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px; color: #9F1239; line-height: 1.5;">
+            <div style="font-weight: 700; margin-bottom: 4px;">⚠️ 超级总台数据清理操作警告：</div>
+            此功能专门由超级管理总台调用，可彻底清理所有子租户或指定子租户历史产生的提现申请与流水对账记录。子租户管理后台完全无此权限。
+          </div>
+
+          <form id="purge-orders-form">
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="form-label" style="font-size: 12px; font-weight: 700;">选择删除与清理范围</label>
+              
+              <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+                <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; cursor: pointer; background: #F8FAFC; padding: 8px 10px; border-radius: 8px; border: 1px solid #E2E8F0;">
+                  <input type="radio" name="purge-scope" value="all_subtenants" checked style="margin-top: 3px; accent-color: #DC2626;">
+                  <div>
+                    <div style="font-weight: 700; color: #1E293B;">一键删除所有子租户订单 (推荐)</div>
+                    <div style="font-size: 11px; color: #64748B;">清空 ccb、ahrcu、icbc 等所有子租户订单，安全保留总台 default 测试订单</div>
+                  </div>
+                </label>
+
+                <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; cursor: pointer; background: #F8FAFC; padding: 8px 10px; border-radius: 8px; border: 1px solid #E2E8F0;">
+                  <input type="radio" name="purge-scope" value="specific_subtenant" style="margin-top: 3px; accent-color: #DC2626;">
+                  <div style="flex: 1;">
+                    <div style="font-weight: 700; color: #1E293B;">仅清空特定指定子租户订单</div>
+                    <select id="purge-specific-tenant" class="form-input" style="height: 32px; font-size: 11.5px; margin-top: 6px;">
+                      <option value="ccb">建设银行专区 (ccb)</option>
+                      <option value="ahrcu">安徽农金专区 (ahrcu)</option>
+                      <option value="icbc">工商银行专区 (icbc)</option>
+                      <option value="gcxq">合肥高新专区 (gcxq)</option>
+                    </select>
+                  </div>
+                </label>
+
+                <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; cursor: pointer; background: #FFF5F5; padding: 8px 10px; border-radius: 8px; border: 1px solid #FED7D7;">
+                  <input type="radio" name="purge-scope" value="all_orders" style="margin-top: 3px; accent-color: #DC2626;">
+                  <div>
+                    <div style="font-weight: 700; color: #991B1B;">彻底清空全域所有订单 (含总台)</div>
+                    <div style="font-size: 11px; color: #9B2C2C;">完全清空全系统所有订单及关联审计日志，恢复初始零单状态</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 16px;">
+              <button type="button" class="btn btn-secondary" id="btn-cancel-purge-orders" style="flex: 1; height: 40px;">取消</button>
+              <button type="submit" class="btn" style="flex: 1.5; height: 40px; background: #DC2626; color: #FFF; font-weight: 700;">确认执行删除</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- 3. 超级管理员重置子租户管理员密码弹窗 Modal -->
+      <div id="modal-reset-tenant-pwd" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); z-index: 10000; align-items: center; justify-content: center; padding: 14px; backdrop-filter: blur(2px);">
+        <div style="background: #FFF; width: 100%; max-width: 400px; border-radius: 16px; padding: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E2E8F0; padding-bottom: 10px; margin-bottom: 12px;">
+            <div style="font-size: 15px; font-weight: 700; color: #1E293B; display: flex; align-items: center; gap: 6px;">
+              <span>🔑</span> 重置子租户管理员密码
+            </div>
+            <button type="button" id="btn-close-reset-pwd-modal" style="background: none; border: none; font-size: 22px; color: #64748B; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+          </div>
+
+          <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+            正在为子租户 <strong id="reset-target-tenant-name" style="color: var(--primary-color);"></strong> 重置后台管理员密码。
+          </div>
+
+          <form id="reset-tenant-pwd-form">
+            <input type="hidden" id="reset-target-tenant-id">
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" style="font-size: 12px;">重置为新密码 <span style="color: var(--danger-color);">*</span></label>
+              <input type="password" id="input-reset-new-pwd" class="form-input" placeholder="请输入新密码 (不少于6位)" minlength="6" required style="height: 40px; font-size: 13px;">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+              <button type="button" class="btn btn-secondary" id="btn-cancel-reset-pwd" style="flex: 1; height: 38px;">取消</button>
+              <button type="submit" class="btn btn-primary" style="flex: 1.5; height: 38px;">确认重置密码</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -705,6 +878,8 @@
   <script src="assets/sound.js"></script>
   <script>
     const ADMIN_TOKEN_KEY = 'cashout_admin_token';
+    window.allTenants = [];
+    window.allQrItems = [];
     let currentUploadedImageDataUrl = '';
 
     // mynotice 声音播报状态、后台保活与新单差量检测引擎
@@ -834,6 +1009,44 @@
       return json.data;
     }
 
+    window.currentAdminUser = null;
+
+    function applyAdminPermissions() {
+      const user = window.currentAdminUser || { is_super_admin: false, tenant_id: 'default' };
+      const badge = document.getElementById('admin-role-badge');
+      const tenantFilter = document.getElementById('admin-tenant-filter');
+      const tenantsTabBtn = document.getElementById('tab-btn-tenants');
+      const superOrderToolbar = document.getElementById('superadmin-order-toolbar');
+
+      if (user.is_super_admin) {
+        if (badge) {
+          badge.innerText = '👑 超级总台';
+          badge.style.background = '#4338CA';
+          badge.style.color = '#FFFFFF';
+        }
+        if (tenantFilter) tenantFilter.style.display = 'inline-block';
+        if (tenantsTabBtn) tenantsTabBtn.style.display = 'flex';
+        if (superOrderToolbar) superOrderToolbar.style.display = 'block';
+      } else {
+        // 子租户管理员
+        if (badge) {
+          badge.innerText = `🏢 ${user.tenant_id || '子租户'} 专区`;
+          badge.style.background = '#059669';
+          badge.style.color = '#FFFFFF';
+        }
+        // 子租户后台锁定当前租户，不展示全域切换
+        if (tenantFilter) {
+          tenantFilter.value = user.tenant_id;
+          tenantFilter.style.display = 'none';
+        }
+        currentTenantFilter = user.tenant_id;
+        // 子租户管理员无多租户管理权限
+        if (tenantsTabBtn) tenantsTabBtn.style.display = 'none';
+        // 子租户管理员绝对无删除订单工具栏
+        if (superOrderToolbar) superOrderToolbar.style.display = 'none';
+      }
+    }
+
     async function checkAuth() {
       const token = getAdminToken();
       if (!token) {
@@ -841,8 +1054,10 @@
         return;
       }
       try {
-        await adminRequest('/api/admin/check');
+        const userInfo = await adminRequest('/api/admin/check');
+        window.currentAdminUser = userInfo;
         showDashboardView();
+        applyAdminPermissions();
         loadAllData();
       } catch (e) {
         showLoginView();
@@ -862,6 +1077,7 @@
     function showDashboardView() {
       document.getElementById('view-login').style.display = 'none';
       document.getElementById('view-dashboard').style.display = 'block';
+      applyAdminPermissions();
       updateSoundUI();
       startBackgroundPolling();
     }
@@ -956,6 +1172,7 @@
       e.preventDefault();
       const u = document.getElementById('login-username').value.trim();
       const p = document.getElementById('login-password').value.trim();
+      const selectedTenant = document.getElementById('login-tenant')?.value || 'default';
 
       // 在用户点击提交的第一交互上下文立即穿透解锁音频 Autoplay
       if (window.MyNoticeSound) {
@@ -967,16 +1184,19 @@
         const res = await fetch('/api/admin/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: u, password: p })
+          body: JSON.stringify({ username: u, password: p, tenant_id: selectedTenant })
         });
         const json = await res.json();
         Loading.hide();
 
         if (json.code === 200 && json.data && json.data.token) {
-          Toast.success('登录成功，欢迎管理员');
+          Toast.success(`登录成功，欢迎【${json.data.username}】`);
           setAdminToken(json.data.token);
+          window.currentAdminUser = json.data;
+          currentTenantFilter = json.data.is_super_admin ? 'all' : json.data.tenant_id;
           isFirstOrderLoad = true;
           showDashboardView();
+          applyAdminPermissions();
           loadAllData();
         } else {
           Toast.error(json.message || '账号或密码错误');
@@ -1174,6 +1394,7 @@
         }
 
         const methodMap = { wechat: '💬 微信零钱', alipay: '🔵 支付宝', bank: '🏦 银行卡' };
+        const isSuperAdmin = Boolean(window.currentAdminUser && window.currentAdminUser.is_super_admin);
 
         container.innerHTML = orders.map(o => {
           let statusClass = 'pending-verify';
@@ -1197,7 +1418,13 @@
           return `
             <div class="order-card-item ${statusClass}">
               <div class="order-card-head">
-                <span class="order-card-no">单号: ${o.order_no}</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  ${isSuperAdmin ? `
+                    <input type="checkbox" class="order-select-chk" value="${o.order_no}" onchange="updateSelectedOrdersCount()" style="width: 16px; height: 16px; cursor: pointer; accent-color: #E11D48;">
+                  ` : ''}
+                  <span class="order-card-no">单号: ${o.order_no}</span>
+                  <span style="font-size: 11px; background: #EEF2FF; color: #4338CA; padding: 1px 6px; border-radius: 4px; font-weight: 600;">${o.tenant_id || 'default'}</span>
+                </div>
                 <span>${new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
               </div>
 
@@ -1273,16 +1500,162 @@
                   <button class="btn btn-secondary btn-sm" style="color: var(--danger-color); max-width: 80px;" onclick="rejectOrderVerify('${o.order_no}')">
                     驳回
                   </button>
+                  ${isSuperAdmin ? `
+                    <button type="button" class="btn btn-secondary btn-sm" style="color: #DC2626; border-color: #FECACA; max-width: 70px;" onclick="deleteSingleOrder('${o.order_no}', '${o.tenant_id}')">
+                      🗑️ 删除
+                    </button>
+                  ` : ''}
                 </div>
-              ` : ''}
+              ` : `
+                ${isSuperAdmin ? `
+                  <div style="display: flex; justify-content: flex-end; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #E2E8F0;">
+                    <button type="button" class="btn btn-secondary btn-sm" style="color: #DC2626; border-color: #FECACA; font-size: 11px; height: 28px; padding: 0 10px;" onclick="deleteSingleOrder('${o.order_no}', '${o.tenant_id}')">
+                      🗑️ 超管删除此历史订单
+                    </button>
+                  </div>
+                ` : ''}
+              `}
             </div>
           `;
         }).join('');
+
+        // 重置全选状态
+        const selectAllChk = document.getElementById('chk-select-all-orders');
+        if (selectAllChk) selectAllChk.checked = false;
+        updateSelectedOrdersCount();
 
       } catch (err) {
         container.innerHTML = `<div style="color: var(--danger-color); text-align: center; padding: 20px;">订单加载失败: ${err.message}</div>`;
       }
     }
+
+    // 订单多选与批量删除工具
+    window.updateSelectedOrdersCount = function() {
+      const checkedBoxes = document.querySelectorAll('.order-select-chk:checked');
+      const count = checkedBoxes.length;
+      const countSpan = document.getElementById('batch-del-count');
+      const batchBtn = document.getElementById('btn-batch-delete-orders');
+      if (countSpan) countSpan.innerText = count;
+      if (batchBtn) {
+        batchBtn.style.display = count > 0 ? 'inline-flex' : 'none';
+      }
+    };
+
+    document.getElementById('chk-select-all-orders')?.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      document.querySelectorAll('.order-select-chk').forEach(chk => {
+        chk.checked = isChecked;
+      });
+      updateSelectedOrdersCount();
+    });
+
+    // 单笔订单删除 (超级总台专用权限)
+    window.deleteSingleOrder = async function(orderNo, tenantId) {
+      if (!window.currentAdminUser?.is_super_admin) {
+        return Toast.error('权限不足: 仅超级管理总台允许删除订单');
+      }
+      if (!confirm(`⚠️ 确认删除订单 [${orderNo}] 吗？\n所属租户: ${tenantId || 'default'}\n删除后该订单及其关联对账流水与日志将被彻底移除，不可恢复！`)) {
+        return;
+      }
+
+      Loading.show('正在删除订单...');
+      try {
+        await adminRequest(`/api/admin/orders/${orderNo}`, { method: 'DELETE' });
+        Loading.hide();
+        Toast.success(`订单 ${orderNo} 已彻底删除`);
+        loadOrders();
+        loadStats();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '删除失败');
+      }
+    };
+
+    // 批量删除选中的订单记录
+    window.batchDeleteSelectedOrders = async function() {
+      if (!window.currentAdminUser?.is_super_admin) {
+        return Toast.error('权限不足: 仅超级管理总台允许删除订单');
+      }
+      const selected = Array.from(document.querySelectorAll('.order-select-chk:checked')).map(c => c.value);
+      if (selected.length === 0) {
+        return Toast.info('请先勾选需要删除的订单');
+      }
+
+      if (!confirm(`⚠️ 确定要批量删除选中的 ${selected.length} 笔订单记录吗？\n此操作不可撤回！`)) {
+        return;
+      }
+
+      Loading.show(`正在批量删除 ${selected.length} 笔订单...`);
+      try {
+        const res = await adminRequest('/api/admin/orders/batch-delete', {
+          method: 'POST',
+          body: JSON.stringify({ order_nos: selected })
+        });
+        Loading.hide();
+        Toast.success(res?.message || `已成功批量删除 ${res?.deleted_count || selected.length} 笔订单`);
+        loadOrders();
+        loadStats();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '批量删除失败');
+      }
+    };
+
+    // 清除/清理子租户订单模态框控制
+    window.openPurgeOrdersModal = function() {
+      if (!window.currentAdminUser?.is_super_admin) {
+        return Toast.error('权限不足: 子租户后台无权进行此高危操作');
+      }
+      // 同步专区下拉菜单
+      const select = document.getElementById('purge-specific-tenant');
+      if (select) {
+        const list = Array.isArray(window.allTenants) ? window.allTenants : (window.allTenants?.items || []);
+        select.innerHTML = list
+          .filter(t => t && t.tenant_id && t.tenant_id !== 'default')
+          .map(t => `<option value="${t.tenant_id}">${t.name} (${t.tenant_id})</option>`).join('');
+      }
+      document.getElementById('modal-purge-orders').style.display = 'flex';
+    };
+
+    window.closePurgeOrdersModal = function() {
+      document.getElementById('modal-purge-orders').style.display = 'none';
+    };
+
+    document.getElementById('btn-close-purge-modal')?.addEventListener('click', closePurgeOrdersModal);
+    document.getElementById('btn-cancel-purge-orders')?.addEventListener('click', closePurgeOrdersModal);
+
+    document.getElementById('purge-orders-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const scope = document.querySelector('input[name="purge-scope"]:checked')?.value || 'all_subtenants';
+      const targetTenant = document.getElementById('purge-specific-tenant')?.value;
+
+      let confirmText = '';
+      if (scope === 'all_subtenants') {
+        confirmText = '⚠️ 极高危操作确认！\n确定要一键清空【所有子租户】的全部订单及流水日志吗？\n(注：总台 default 订单将被保留)';
+      } else if (scope === 'specific_subtenant') {
+        confirmText = `⚠️ 极高危操作确认！\n确定要清空子租户【${targetTenant}】的全部订单吗？`;
+      } else if (scope === 'all_orders') {
+        confirmText = '⚠️ 最高级全域清空确认！\n确定要彻底清空全系统所有订单（包含总台和所有子租户）吗？数据将恢复为 0！';
+      }
+
+      if (!confirm(confirmText)) return;
+
+      Loading.show('正在执行清理，此操作正在逐表级联删除...');
+      try {
+        const res = await adminRequest('/api/admin/orders/purge-subtenants', {
+          method: 'POST',
+          body: JSON.stringify({ scope, target_tenant: targetTenant })
+        });
+        Loading.hide();
+        Toast.success(res?.message || '订单清理完成！');
+        closePurgeOrdersModal();
+        loadOrders();
+        loadStats();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '清理操作失败');
+      }
+    });
 
     // 复制账号
     window.copyText = function(text) {
@@ -1583,7 +1956,8 @@
     async function loadTenants(silent = false) {
       const container = document.getElementById('tenants-cards-container');
       try {
-        const tenants = await adminRequest('/api/admin/tenants');
+        const raw = await adminRequest('/api/admin/tenants');
+        const tenants = Array.isArray(raw) ? raw : (raw?.items || []);
         window.allTenants = tenants;
 
         syncTenantSelects(tenants);
@@ -1629,12 +2003,15 @@
 
               <!-- 快捷操作栏 -->
               <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px; border-top: 1px dashed #E2E8F0; font-size: 12px;">
-                <div style="display: flex; gap: 6px;">
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                   <a href="/t/${t.tenant_id}/" target="_blank" class="btn btn-secondary btn-sm" style="height: 26px; font-size: 11px; padding: 0 8px; color: #4F46E5;">
                     📱 访问专属前台
                   </a>
                   <button type="button" class="btn btn-secondary btn-sm" style="height: 26px; font-size: 11px; padding: 0 8px; ${isCurrentFiltered ? 'background: #EEF2FF; color: #4F46E5; font-weight: 700;' : ''}" onclick="filterByTenant('${t.tenant_id}')">
                     ${isCurrentFiltered ? '🎯 正在查看' : '🔍 查看该专区数据'}
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" style="height: 26px; font-size: 11px; padding: 0 8px; color: #D97706; border-color: #FDE68A;" onclick="openResetTenantPwdModal('${t.tenant_id}', '${t.name}')">
+                    🔑 重置管理员密码
                   </button>
                 </div>
                 <div>
@@ -1654,31 +2031,42 @@
     }
 
     function syncTenantSelects(tenants) {
-      if (!tenants || tenants.length === 0) return;
+      const list = Array.isArray(tenants) ? tenants : (tenants?.items || window.allTenants || []);
+      if (!list || list.length === 0) return;
       
       const filterSelect = document.getElementById('admin-tenant-filter');
       const inputSelect = document.getElementById('input-tenant-id');
       const editSelect = document.getElementById('edit-tenant-id');
+      const loginSelect = document.getElementById('login-tenant');
 
       if (filterSelect) {
         const savedVal = filterSelect.value || currentTenantFilter;
         filterSelect.innerHTML = '<option value="all">🌐 全域所有租户</option>' + 
-          tenants.map(t => `<option value="${t.tenant_id}">${t.name} (${t.tenant_id})</option>`).join('');
+          list.map(t => `<option value="${t.tenant_id}">${t.name} (${t.tenant_id})</option>`).join('');
         filterSelect.value = savedVal;
       }
 
-      const tenantOptions = tenants.map(t => `<option value="${t.tenant_id}">${t.name} (${t.tenant_id})</option>`).join('');
+      const tenantOptions = list.map(t => `<option value="${t.tenant_id}">${t.name} (${t.tenant_id})</option>`).join('');
 
       if (inputSelect) {
         const savedVal = inputSelect.value || 'default';
         inputSelect.innerHTML = tenantOptions;
-        if (tenants.some(t => t.tenant_id === savedVal)) inputSelect.value = savedVal;
+        if (list.some(t => t.tenant_id === savedVal)) inputSelect.value = savedVal;
       }
 
       if (editSelect) {
         const savedVal = editSelect.value || 'default';
         editSelect.innerHTML = tenantOptions;
-        if (tenants.some(t => t.tenant_id === savedVal)) editSelect.value = savedVal;
+        if (list.some(t => t.tenant_id === savedVal)) editSelect.value = savedVal;
+      }
+
+      if (loginSelect) {
+        const savedVal = loginSelect.value || 'default';
+        loginSelect.innerHTML = list.map(t => {
+          if (t.tenant_id === 'default') return `<option value="default">👑 默认超级管理总台 (default)</option>`;
+          return `<option value="${t.tenant_id}">${t.name} (${t.tenant_id})</option>`;
+        }).join('');
+        if (list.some(t => t.tenant_id === savedVal)) loginSelect.value = savedVal;
       }
     }
 
@@ -1704,6 +2092,127 @@
         Toast.error(err.message || '删除失败');
       }
     };
+
+    // ========== 5. 密码修改模态框与逻辑 (所有后台通用，各租户管理员密码独立互不干扰) ==========
+    window.openChangePasswordModal = function() {
+      const user = window.currentAdminUser || { tenant_id: 'default' };
+      const nameEl = document.getElementById('pwd-modal-tenant-name');
+      if (nameEl) {
+        nameEl.innerText = user.is_super_admin 
+          ? '👑 默认超级管理总台 (default)' 
+          : `🏢 ${user.tenant_id} 专区`;
+      }
+      document.getElementById('input-old-pwd').value = '';
+      document.getElementById('input-new-pwd').value = '';
+      document.getElementById('input-confirm-pwd').value = '';
+      document.getElementById('modal-change-password').style.display = 'flex';
+      setTimeout(() => document.getElementById('input-old-pwd').focus(), 100);
+    };
+
+    window.closeChangePasswordModal = function() {
+      document.getElementById('modal-change-password').style.display = 'none';
+    };
+
+    document.getElementById('btn-open-pwd-modal')?.addEventListener('click', openChangePasswordModal);
+    document.getElementById('btn-close-pwd-modal')?.addEventListener('click', closeChangePasswordModal);
+    document.getElementById('btn-cancel-change-pwd')?.addEventListener('click', closeChangePasswordModal);
+
+    document.getElementById('change-pwd-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const old_password = document.getElementById('input-old-pwd').value;
+      const new_password = document.getElementById('input-new-pwd').value;
+      const confirm_password = document.getElementById('input-confirm-pwd').value;
+
+      if (!old_password || !new_password) {
+        return Toast.error('请填写完整密码信息');
+      }
+      if (new_password.length < 6) {
+        return Toast.error('新密码长度不能少于 6 位');
+      }
+      if (new_password !== confirm_password) {
+        return Toast.error('两次输入的新密码不一致，请核对');
+      }
+
+      Loading.show('正在修改密码...');
+      try {
+        const res = await adminRequest('/api/admin/password', {
+          method: 'PUT',
+          body: JSON.stringify({ old_password, new_password })
+        });
+        Loading.hide();
+        Toast.success(res?.message || '密码修改成功！下次登录请使用新密码');
+        closeChangePasswordModal();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '修改密码失败');
+      }
+    });
+
+    // ========== 6. 超管重置子租户密码模态框与逻辑 ==========
+    window.openResetTenantPwdModal = function(tenantId, tenantName) {
+      if (!window.currentAdminUser?.is_super_admin) {
+        return Toast.error('权限不足: 仅超级管理总台允许重置子租户密码');
+      }
+      document.getElementById('reset-target-tenant-id').value = tenantId;
+      const nameEl = document.getElementById('reset-target-tenant-name');
+      if (nameEl) nameEl.innerText = `${tenantName} (${tenantId})`;
+      document.getElementById('input-reset-new-pwd').value = '';
+      document.getElementById('modal-reset-tenant-pwd').style.display = 'flex';
+      setTimeout(() => document.getElementById('input-reset-new-pwd').focus(), 100);
+    };
+
+    window.closeResetTenantPwdModal = function() {
+      document.getElementById('modal-reset-tenant-pwd').style.display = 'none';
+    };
+
+    document.getElementById('btn-close-reset-pwd-modal')?.addEventListener('click', closeResetTenantPwdModal);
+    document.getElementById('btn-cancel-reset-pwd')?.addEventListener('click', closeResetTenantPwdModal);
+
+    document.getElementById('reset-tenant-pwd-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const target_tenant_id = document.getElementById('reset-target-tenant-id').value;
+      const new_password = document.getElementById('input-reset-new-pwd').value;
+
+      if (!target_tenant_id || !new_password) {
+        return Toast.error('请填写重置新密码');
+      }
+      if (new_password.length < 6) {
+        return Toast.error('新密码长度不能少于 6 位');
+      }
+
+      Loading.show(`正在重置租户 [${target_tenant_id}] 管理员密码...`);
+      try {
+        const res = await adminRequest(`/api/admin/tenants/${target_tenant_id}/reset-password`, {
+          method: 'PUT',
+          body: JSON.stringify({ new_password })
+        });
+        Loading.hide();
+        Toast.success(res?.message || `租户 [${target_tenant_id}] 管理员密码已成功重置！`);
+        closeResetTenantPwdModal();
+      } catch (err) {
+        Loading.hide();
+        Toast.error(err.message || '重置密码失败');
+      }
+    });
+
+    // ========== 7. URL 参数智能识别与环境初始化 ==========
+    function initTenantFromUrl() {
+      const path = window.location.pathname;
+      let detectedTenant = 'default';
+      if (path.startsWith('/t/')) {
+        const parts = path.split('/');
+        if (parts[2]) detectedTenant = parts[2].toLowerCase();
+      }
+      const urlTenant = new URLSearchParams(window.location.search).get('tenant');
+      if (urlTenant) detectedTenant = urlTenant.toLowerCase();
+
+      const sel = document.getElementById('login-tenant');
+      if (sel) {
+        if (sel.querySelector(`option[value="${detectedTenant}"]`)) {
+          sel.value = detectedTenant;
+        }
+      }
+    }
 
     document.getElementById('btn-open-create-tenant')?.addEventListener('click', () => {
       document.getElementById('card-create-tenant').style.display = 'block';
@@ -1757,7 +2266,10 @@
       Toast.info('已刷新');
     });
 
-    document.addEventListener('DOMContentLoaded', checkAuth);
+    document.addEventListener('DOMContentLoaded', () => {
+      initTenantFromUrl();
+      checkAuth();
+    });
   </script>
 </body>
 </html>

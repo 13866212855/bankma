@@ -367,13 +367,14 @@ router.get('/tenants', requireAdmin, async (req, res, next) => {
       pending_orders: (statsMap[t.tenant_id] && statsMap[t.tenant_id].pending_orders) || 0
     }));
 
+    // 同时兼顾数组调用与 items 对象结构
+    enriched.items = enriched;
+    enriched.total = enriched.length;
+
     return res.json({
       code: 200,
       message: '获取成功',
-      data: {
-        total: enriched.length,
-        items: enriched
-      }
+      data: enriched
     });
   } catch (error) {
     next(error);
@@ -1039,6 +1040,125 @@ router.put('/orders/:orderNo/reject', requireAdmin, async (req, res, next) => {
 });
 
 /**
+ * DELETE /api/admin/orders/:orderNo
+ * 超级管理员删除单条订单记录（仅限超级总台管理员，子租户后台无此功能）
+ */
+router.delete('/orders/:orderNo', requireSuperAdmin, async (req, res, next) => {
+  try {
+    const { orderNo } = req.params;
+
+    // 先查询订单信息确认存在
+    const checkRes = await query('SELECT id, order_no, tenant_id, amount FROM orders WHERE order_no = $1', [orderNo]);
+    if (checkRes.rowCount === 0) {
+      return res.status(404).json({ code: 404, message: '未找到对应订单或已被删除' });
+    }
+
+    const targetOrder = checkRes.rows[0];
+
+    // 级联删除订单关联的日志记录
+    await query('DELETE FROM order_logs WHERE order_id = $1', [targetOrder.id]);
+    // 删除订单主体
+    await query('DELETE FROM orders WHERE id = $1', [targetOrder.id]);
+
+    console.log(`[SuperAdmin] 超级管理员已删除订单: ${orderNo}, 租户: ${targetOrder.tenant_id}, 金额: ${targetOrder.amount}`);
+
+    return res.json({
+      code: 200,
+      message: `订单 [${orderNo}] (所属租户: ${targetOrder.tenant_id}) 已安全删除`,
+      data: { order_no: orderNo, tenant_id: targetOrder.tenant_id }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/orders/batch-delete
+ * 超级管理员批量删除选中的订单记录（仅限超级总台管理员）
+ */
+router.post('/orders/batch-delete', requireSuperAdmin, async (req, res, next) => {
+  try {
+    const { order_nos } = req.body || {};
+    if (!Array.isArray(order_nos) || order_nos.length === 0) {
+      return res.status(400).json({ code: 400, message: '请选择至少一条要删除的订单' });
+    }
+
+    // 查找待删订单ID
+    const findRes = await query('SELECT id, order_no, tenant_id FROM orders WHERE order_no = ANY($1)', [order_nos]);
+    if (findRes.rowCount === 0) {
+      return res.status(404).json({ code: 404, message: '所选订单均不存在或已被删除' });
+    }
+
+    const orderIds = findRes.rows.map(r => r.id);
+
+    // 删除关联日志与订单
+    await query('DELETE FROM order_logs WHERE order_id = ANY($1)', [orderIds]);
+    const delRes = await query('DELETE FROM orders WHERE id = ANY($1)', [orderIds]);
+
+    console.log(`[SuperAdmin] 批量删除订单完成，共删除 ${delRes.rowCount} 条订单`);
+
+    return res.json({
+      code: 200,
+      message: `已成功批量删除 ${delRes.rowCount} 条订单记录`,
+      data: { deleted_count: delRes.rowCount }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/orders/purge-subtenants
+ * 超级管理员清理/清空所有子租户下的订单记录（仅限超级总台管理员，子租户后台无此权限）
+ */
+router.post('/orders/purge-subtenants', requireSuperAdmin, async (req, res, next) => {
+  try {
+    const { scope, tenant_id, include_default } = req.body || {};
+
+    let deleteSql = '';
+    let params = [];
+    let logMsg = '';
+
+    if (scope === 'specific_subtenant' && tenant_id) {
+      // 清空特定子租户下的所有订单
+      const cleanTenant = tenant_id.trim().toLowerCase();
+      // 获取待删订单IDs
+      const findOrders = await query('SELECT id FROM orders WHERE tenant_id = $1', [cleanTenant]);
+      const ids = findOrders.rows.map(r => r.id);
+      if (ids.length > 0) {
+        await query('DELETE FROM order_logs WHERE order_id = ANY($1)', [ids]);
+      }
+      const result = await query('DELETE FROM orders WHERE tenant_id = $1', [cleanTenant]);
+      logMsg = `已清空子租户 [${cleanTenant}] 下的全部订单，共删除 ${result.rowCount} 条`;
+    } else if (include_default === true) {
+      // 清空全域所有订单（包含总台与所有子租户）
+      await query('DELETE FROM order_logs');
+      const result = await query('DELETE FROM orders');
+      logMsg = `已清空全域所有订单（包含总台与全部子租户），共删除 ${result.rowCount} 条`;
+    } else {
+      // 默认：清空所有【子租户】下的订单记录（安全保留默认总台 default 订单）
+      const findSubOrders = await query("SELECT id FROM orders WHERE tenant_id IS NOT NULL AND tenant_id != 'default'");
+      const subIds = findSubOrders.rows.map(r => r.id);
+      if (subIds.length > 0) {
+        await query('DELETE FROM order_logs WHERE order_id = ANY($1)', [subIds]);
+      }
+      const result = await query("DELETE FROM orders WHERE tenant_id IS NOT NULL AND tenant_id != 'default'");
+      logMsg = `已成功清空所有子租户下的全部订单记录（总台数据已安全保留），共删除 ${result.rowCount} 条`;
+    }
+
+    console.log(`[SuperAdmin] ${logMsg}`);
+
+    return res.json({
+      code: 200,
+      message: logMsg,
+      data: { success: true }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/admin/stats
  * 获取概览统计数据 (支持按租户过滤或全局汇总)
  */
@@ -1249,142 +1369,5 @@ async function handleTTS(req, res, next) {
 
 router.get('/tts', handleTTS);
 router.post('/tts', handleTTS);
-
-/**
- * ========== mysingledomain2mul 多租户空间管理 API ==========
- */
-
-/**
- * GET /api/admin/tenants
- * 获取系统中所有注册的租户空间及其微服务反代配置
- */
-router.get('/tenants', requireAdmin, async (req, res, next) => {
-  try {
-    const tenants = await getAllTenants();
-    return res.json({
-      code: 200,
-      message: '获取租户列表成功',
-      data: tenants
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * POST /api/admin/tenants
- * 动态开通/创建新的租户空间 (支持独立上游微服务代理配置与数据隔离空间)
- */
-router.post('/tenants', requireAdmin, async (req, res, next) => {
-  try {
-    const { tenant_id, name, description, upstream_url, config } = req.body;
-    if (!tenant_id || !name) {
-      return res.status(400).json({
-        code: 400,
-        message: '租户标识 (tenant_id) 和租户名称 (name) 不能为空'
-      });
-    }
-
-    const cleanId = tenant_id.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
-    if (!cleanId) {
-      return res.status(400).json({
-        code: 400,
-        message: '租户标识格式不合法，仅支持小写英文字母、数字、下划线及连字符'
-      });
-    }
-
-    const existing = await getTenantById(cleanId);
-    if (existing) {
-      return res.status(400).json({
-        code: 400,
-        message: `租户 [${cleanId}] 已存在，无法重复创建`
-      });
-    }
-
-    const insertRes = await query(
-      `INSERT INTO tenants (tenant_id, name, description, upstream_url, config, is_active)
-       VALUES ($1, $2, $3, $4, $5, true)
-       RETURNING *`,
-      [cleanId, name.trim(), description || '', upstream_url || null, JSON.stringify(config || {})]
-    );
-
-    invalidateTenantCache(cleanId);
-
-    return res.json({
-      code: 200,
-      message: `租户空间 [${name}] 开通成功`,
-      data: insertRes.rows[0]
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * PUT /api/admin/tenants/:tenantId
- * 更新指定租户的配置 (包括上游微服务路由、启停状态等)
- */
-router.put('/tenants/:tenantId', requireAdmin, async (req, res, next) => {
-  try {
-    const { tenantId } = req.params;
-    const { name, description, upstream_url, is_active, config } = req.body;
-
-    const existing = await getTenantById(tenantId);
-    if (!existing) {
-      return res.status(404).json({
-        code: 404,
-        message: `租户 [${tenantId}] 不存在`
-      });
-    }
-
-    const updateRes = await query(
-      `UPDATE tenants
-       SET name = COALESCE($1, name),
-           description = COALESCE($2, description),
-           upstream_url = $3,
-           is_active = COALESCE($4, is_active),
-           config = COALESCE($5, config)
-       WHERE tenant_id = $6
-       RETURNING *`,
-      [name, description, upstream_url, is_active, config ? JSON.stringify(config) : null, tenantId]
-    );
-
-    invalidateTenantCache(tenantId);
-
-    return res.json({
-      code: 200,
-      message: '租户配置已更新',
-      data: updateRes.rows[0]
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * DELETE /api/admin/tenants/:tenantId
- * 删除租户空间
- */
-router.delete('/tenants/:tenantId', requireAdmin, async (req, res, next) => {
-  try {
-    const { tenantId } = req.params;
-    if (tenantId === 'default') {
-      return res.status(400).json({
-        code: 400,
-        message: '系统默认总台租户 (default) 禁止删除'
-      });
-    }
-
-    await query('DELETE FROM tenants WHERE tenant_id = $1', [tenantId]);
-    invalidateTenantCache(tenantId);
-
-    return res.json({
-      code: 200,
-      message: `租户 [${tenantId}] 已成功移除`
-    });
-  } catch (err) {
-    next(err);
-  }
-});
 
 module.exports = router;

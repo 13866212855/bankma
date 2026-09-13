@@ -340,7 +340,7 @@
     <div class="channel-drawer-sheet">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
         <div>
-          <h3 style="font-size: 16px; font-weight: 700; color: var(--text-main);">切换其他二维码</h3>
+          <h3 id="channel-picker-title" style="font-size: 16px; font-weight: 700; color: var(--text-main);">选择/切换收款码通道</h3>
           <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">选择适合您支付限额或未受限的商户收款通道</p>
         </div>
         <button class="close-btn" id="btn-close-channel-picker">&times;</button>
@@ -533,25 +533,35 @@
       const container = document.getElementById('channel-list-container');
       if (!container) return;
 
+      const titleEl = document.getElementById('channel-picker-title');
+      if (titleEl) {
+        titleEl.innerText = `选择/切换收款码通道 (共 ${allQrcodes.length} 个)`;
+      }
+
+      if (!allQrcodes || allQrcodes.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">后台暂无可用收款码</div>';
+        return;
+      }
+
       container.innerHTML = allQrcodes.map(item => {
         const isCur = activeQrData && activeQrData.id === item.id;
         return `
-          <div class="channel-item-card ${isCur ? 'active' : ''}" onclick="selectChannelItem(${item.id})">
-            <div>
+          <div class="channel-item-card ${isCur ? 'active' : ''}" onclick="selectChannelItem(${item.id})" style="${isCur ? 'border-color: #4F46E5; background: #F8FAFC;' : ''}">
+            <div style="flex: 1;">
               <div style="font-weight: 700; font-size: 14px; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
                 <span>${item.merchant_name}</span>
-                ${isCur ? '<span class="header-tag" style="font-size: 10px; padding: 1px 6px;">当前展示</span>' : ''}
+                ${isCur ? '<span class="header-tag" style="font-size: 10px; padding: 1px 6px; background: #DCFCE7; color: #15803D; font-weight: 700;">🟢 当前展示中</span>' : ''}
               </div>
               <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">
                 ${item.channel_desc || '商户聚合直连通道'}
               </div>
-              <div style="display: flex; gap: 6px; margin-top: 4px;">
+              <div style="display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap;">
                 <span class="channel-badge fee" style="color: #B45309; background: #FEF3C7; border: none; font-size: 10px;">费率: ${item.fee_rate}%</span>
                 <span class="channel-badge limit" style="color: #047857; background: #D1FAE5; border: none; font-size: 10px;">限额: ${item.min_limit || 1}~${item.max_limit || 10000}元</span>
               </div>
             </div>
-            <button class="btn btn-sm ${isCur ? 'btn-primary' : 'btn-secondary'}" style="width: auto; height: 32px; padding: 0 14px; font-size: 12px;">
-              ${isCur ? '使用中' : '切换'}
+            <button class="btn btn-sm ${isCur ? 'btn-primary' : 'btn-secondary'}" style="width: auto; height: 32px; padding: 0 12px; font-size: 12px; white-space: nowrap; ${isCur ? 'background: #059669;' : ''}">
+              ${isCur ? '当前使用中' : '🔄 切换'}
             </button>
           </div>
         `;

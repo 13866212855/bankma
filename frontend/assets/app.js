@@ -87,6 +87,7 @@ const Toast = {
     if (type === 'success') icon = '✅';
     if (type === 'error') icon = '⚠️';
     if (type === 'warning') icon = '⏳';
+    if (type === 'info') icon = 'ℹ️';
 
     toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
     container.appendChild(toast);
@@ -98,10 +99,14 @@ const Toast = {
     }, duration);
   },
 
-  success(msg) { this.show(msg, 'success'); },
-  error(msg) { this.show(msg, 'error', 4000); },
-  warning(msg) { this.show(msg, 'warning'); }
+  success(msg, duration) { this.show(msg, 'success', duration); },
+  error(msg, duration) { this.show(msg, 'error', duration || 4000); },
+  warning(msg, duration) { this.show(msg, 'warning', duration); },
+  info(msg, duration) { this.show(msg, 'info', duration); }
 };
+
+window.Toast = Toast;
+window.API = API;
 
 // 全局加载状态遮罩
 const Loading = {
@@ -130,6 +135,8 @@ const Loading = {
     }
   }
 };
+
+window.Loading = Loading;
 
 // 状态管理服务 - 客户端唯一性标识与用户数据安全隔离
 const StateService = {
@@ -350,6 +357,8 @@ const UserPreferenceService = {
     return list;
   }
 };
+
+window.StateService = StateService;
 
 // 页面导航高亮设置
 function highlightNav() {
